@@ -1,0 +1,260 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:open_station/services/audio_player_service.dart';
+import 'package:open_station/services/bookmark_service.dart';
+import 'package:open_station/theme/app_theme.dart';
+import 'package:open_station/ui/widgets/station_artwork.dart';
+
+class PlayerBar extends StatelessWidget {
+  const PlayerBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final playerService = context.watch<AudioPlayerService>();
+    final bookmarkService = context.watch<BookmarkService>();
+
+    final currentStation = playerService.currentStation;
+    final state = playerService.state;
+    final isPlaying = state == AudioPlayerState.playing;
+    final isConnecting = state == AudioPlayerState.connecting;
+    final isFailed = state == AudioPlayerState.failed;
+    final isBookmarked = currentStation != null && bookmarkService.isBookmarked(currentStation.uuid);
+
+    return Container(
+      height: 88,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: const BoxDecoration(
+        color: AppColors.slateSurface,
+        border: Border(top: BorderSide(color: AppColors.softDivider, width: 1)),
+      ),
+      child: Row(
+        children: [
+          // Station Metadata & Artwork Area
+          Expanded(
+            flex: 3,
+            child: currentStation != null
+                ? Row(
+                    children: [
+                      StationArtwork(
+                        faviconUrl: currentStation.faviconUrl,
+                        size: 52,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              currentStation.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.primaryText,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              isFailed
+                                  ? (playerService.lastError.isNotEmpty ? playerService.lastError : 'Playback failed')
+                                  : (currentStation.countryCode ?? currentStation.tags.take(2).join(', ')),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: isFailed ? AppColors.error : AppColors.secondaryText,
+                                fontSize: 12,
+                                fontWeight: isFailed ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          isBookmarked ? Icons.favorite : Icons.favorite_border,
+                          color: isBookmarked ? AppColors.openGreen : AppColors.mutedText,
+                        ),
+                        onPressed: () {
+                          bookmarkService.toggleBookmark(currentStation);
+                        },
+                        tooltip: isBookmarked ? 'Remove Bookmark' : 'Add Bookmark',
+                      ),
+                    ],
+                  )
+                : const Row(
+                    children: [
+                      Icon(Icons.radio, color: AppColors.mutedText, size: 36),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'No station selected',
+                          style: TextStyle(color: AppColors.mutedText, fontSize: 14),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+
+          // Central Playback Controls
+          Expanded(
+            flex: 4,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Stop button
+                IconButton(
+                  icon: const Icon(Icons.stop, color: AppColors.secondaryText),
+                  onPressed: currentStation != null && state != AudioPlayerState.stopped
+                      ? () => playerService.stop()
+                      : null,
+                  tooltip: 'Stop',
+                ),
+
+                const SizedBox(width: 12),
+
+                // Main Play / Pause button
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    color: AppColors.openGreen,
+                    shape: BoxShape.circle,
+                  ),
+                  child: isConnecting
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: Colors.white,
+                          ),
+                        )
+                      : IconButton(
+                          icon: Icon(
+                            isPlaying ? Icons.pause : Icons.play_arrow,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                          onPressed: currentStation == null
+                              ? null
+                              : () {
+                                  if (isPlaying) {
+                                    playerService.pause();
+                                  } else if (state == AudioPlayerState.paused) {
+                                    playerService.resume();
+                                  } else {
+                                    playerService.playStation(currentStation);
+                                  }
+                                },
+                        ),
+                ),
+
+                const SizedBox(width: 16),
+
+                // Status Badge
+                _buildStatusBadge(state),
+              ],
+            ),
+          ),
+
+          // Volume Control Area
+          Expanded(
+            flex: 3,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    playerService.volume == 0
+                        ? Icons.volume_off
+                        : (playerService.volume < 0.5 ? Icons.volume_down : Icons.volume_up),
+                    color: AppColors.secondaryText,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    if (playerService.volume > 0) {
+                      playerService.setVolume(0);
+                    } else {
+                      playerService.setVolume(1.0);
+                    }
+                  },
+                ),
+                SizedBox(
+                  width: 120,
+                  child: SliderTheme(
+                    data: SliderThemeData(
+                      activeTrackColor: AppColors.signalBlue,
+                      inactiveTrackColor: AppColors.raisedSlate,
+                      thumbColor: AppColors.primaryText,
+                      trackHeight: 4,
+                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    ),
+                    child: Slider(
+                      value: playerService.volume,
+                      onChanged: (val) {
+                        playerService.setVolume(val);
+                        bookmarkService.setVolume(val);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(AudioPlayerState state) {
+    Color badgeColor;
+    String label;
+
+    switch (state) {
+      case AudioPlayerState.playing:
+        badgeColor = AppColors.openGreen;
+        label = 'PLAYING';
+        break;
+      case AudioPlayerState.connecting:
+        badgeColor = AppColors.connectingBlue;
+        label = 'CONNECTING';
+        break;
+      case AudioPlayerState.paused:
+        badgeColor = AppColors.signalBlue;
+        label = 'PAUSED';
+        break;
+      case AudioPlayerState.stopped:
+        badgeColor = AppColors.disabledText;
+        label = 'STOPPED';
+        break;
+      case AudioPlayerState.failed:
+        badgeColor = AppColors.error;
+        label = 'FAILED';
+        break;
+      case AudioPlayerState.idle:
+        badgeColor = AppColors.disabledText;
+        label = 'IDLE';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: badgeColor.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: badgeColor, width: 1),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: badgeColor,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+}
