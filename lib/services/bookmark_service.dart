@@ -15,6 +15,7 @@ class BookmarkService extends ChangeNotifier {
   final List<Station> _bookmarks = [];
   double _lastVolume = 1.0;
   Completer<void>? _saveLock;
+  bool _loadFailed = false;
 
   List<Station> get bookmarks => List.unmodifiable(_bookmarks);
   double get lastVolume => _lastVolume;
@@ -67,12 +68,13 @@ class BookmarkService extends ChangeNotifier {
       }
       notifyListeners();
     } catch (e) {
+      _loadFailed = true;
       debugPrint('Error loading bookmarks: $e');
     }
   }
 
   Future<void> _saveToDisk() async {
-    if (_storageFile == null) return;
+    if (_storageFile == null || _loadFailed) return;
 
     while (_saveLock != null) {
       await _saveLock!.future;
@@ -91,10 +93,12 @@ class BookmarkService extends ChangeNotifier {
 
       await tmpFile.writeAsString(jsonString, flush: true);
 
-      if (await _storageFile!.exists()) {
-        await _storageFile!.delete();
+      try {
+        await tmpFile.rename(_storageFile!.path);
+      } on FileSystemException {
+        await tmpFile.copy(_storageFile!.path);
+        await tmpFile.delete();
       }
-      await tmpFile.rename(_storageFile!.path);
     } catch (e) {
       debugPrint('Failed to save bookmarks atomically: $e');
     } finally {

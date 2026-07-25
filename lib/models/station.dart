@@ -62,12 +62,13 @@ class Station {
 
     // Parse bitrate (treat 0 or negative as null)
     int? bitrate;
-    if (json['bitrate'] != null) {
-      if (json['bitrate'] is num) {
-        final val = (json['bitrate'] as num).toInt();
+    final rawBitrate = json['bitrate'];
+    if (rawBitrate != null) {
+      if (rawBitrate is num) {
+        final val = rawBitrate.toInt();
         if (val > 0) bitrate = val;
-      } else if (json['bitrate'] is String) {
-        final val = int.tryParse(json['bitrate']);
+      } else if (rawBitrate is String) {
+        final val = double.tryParse(rawBitrate)?.toInt();
         if (val != null && val > 0) bitrate = val;
       }
     }

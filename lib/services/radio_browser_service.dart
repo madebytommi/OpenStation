@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -39,7 +40,7 @@ class RadioBrowserService {
     try {
       final List<InternetAddress> addresses = await InternetAddress.lookup(
         'all.api.radio-browser.info',
-      );
+      ).timeout(const Duration(seconds: 5));
       for (final addr in addresses) {
         try {
           final reverse = await addr.reverse();

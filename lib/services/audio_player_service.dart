@@ -15,6 +15,7 @@ class AudioPlayerService extends ChangeNotifier {
   Station? _currentStation;
   String _lastError = '';
   double _volume = 1.0;
+  int _playRequestToken = 0;
 
   StreamSubscription? _playingSub;
   StreamSubscription? _bufferingSub;
@@ -149,6 +150,7 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> playUrl(String url) async {
+    final currentToken = ++_playRequestToken;
     _lastError = '';
     
     if (_player == null) {
@@ -157,12 +159,21 @@ class AudioPlayerService extends ChangeNotifier {
       await _player!.stop();
     }
 
+    if (currentToken != _playRequestToken) return;
+
     _setState(AudioPlayerState.connecting);
     
     try {
       await _player!.open(Media(url, httpHeaders: {'User-Agent': 'OpenStation/0.1'}));
+      
+      if (currentToken != _playRequestToken) {
+        await _player!.stop();
+        return;
+      }
+      
       await _player!.setVolume(_volume * 100); 
     } catch (e) {
+      if (currentToken != _playRequestToken) return;
       _lastError = e.toString();
       _setState(AudioPlayerState.failed);
     }
@@ -183,6 +194,7 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    _playRequestToken++;
     if (_player != null) {
       await _player!.stop();
       _setState(AudioPlayerState.stopped);
