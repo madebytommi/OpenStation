@@ -57,25 +57,59 @@ class PlayerBar extends StatelessWidget {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              isFailed
-                                  ? (playerService.lastError.isNotEmpty
-                                        ? playerService.lastError
-                                        : 'Playback failed')
-                                  : (currentStation.countryCode ??
-                                        currentStation.tags.take(2).join(', ')),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: isFailed
-                                    ? AppColors.error
-                                    : AppColors.secondaryText,
-                                fontSize: 12,
-                                fontWeight: isFailed
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                              ),
+                            ValueListenableBuilder<String?>(
+                              valueListenable: playerService.currentMetadata,
+                              builder: (context, metadata, child) {
+                                final bool hasMetadata =
+                                    metadata != null && metadata.isNotEmpty;
+                                final String subtitleText;
+
+                                if (isFailed) {
+                                  subtitleText =
+                                      playerService.lastError.isNotEmpty
+                                      ? playerService.lastError
+                                      : 'Playback failed';
+                                } else if (hasMetadata) {
+                                  subtitleText = metadata;
+                                } else {
+                                  subtitleText =
+                                      currentStation.countryCode ??
+                                      currentStation.tags.take(2).join(', ');
+                                }
+
+                                if (subtitleText.isEmpty && !isFailed) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    subtitleText,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style:
+                                        Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.copyWith(
+                                          color: isFailed
+                                              ? AppColors.error
+                                              : AppColors.secondaryText,
+                                          fontWeight: isFailed
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ) ??
+                                        TextStyle(
+                                          color: isFailed
+                                              ? AppColors.error
+                                              : AppColors.secondaryText,
+                                          fontSize: 12,
+                                          fontWeight: isFailed
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ),
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),

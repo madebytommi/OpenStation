@@ -23,6 +23,9 @@ class AudioPlayerService extends ChangeNotifier {
   StreamSubscription? _completedSub;
   StreamSubscription? _errorSub;
   StreamSubscription? _logSub;
+  StreamSubscription? _trackSub;
+
+  final ValueNotifier<String?> currentMetadata = ValueNotifier<String?>(null);
 
   SMTCWindows? _smtc;
   StreamSubscription? _smtcSub;
@@ -97,23 +100,48 @@ class AudioPlayerService extends ChangeNotifier {
 
     _completedSub = _player!.stream.completed.listen((completed) {
       if (completed) {
+        currentMetadata.value = null;
         _setState(AudioPlayerState.stopped);
       }
     });
 
     _errorSub = _player!.stream.error.listen((errorStr) {
       if (errorStr.isNotEmpty) {
+        currentMetadata.value = null;
         _lastError = errorStr;
         _setState(AudioPlayerState.failed);
       }
     });
 
+    _trackSub = _player!.stream.track.listen((track) {
+      String? title = track.audio.title;
+      if (title != null) {
+        title = title.trim();
+        if (title.isEmpty) title = null;
+      }
+      currentMetadata.value = title;
+    });
+
     _logSub = _player!.stream.log.listen((event) {
+      final text = event.text.toLowerCase();
       if (event.level == 'error' ||
-          event.text.toLowerCase().contains('error') ||
-          event.text.toLowerCase().contains('failed')) {
+          text.contains('error') ||
+          text.contains('failed')) {
         _lastError = event.text;
+        currentMetadata.value = null;
         notifyListeners();
+      } else if (text.contains('icy-title:')) {
+        final parts = event.text.split(
+          RegExp(r'icy-title:\s*', caseSensitive: false),
+        );
+        if (parts.length > 1) {
+          String title = parts[1].trim();
+          if (title.isEmpty) {
+            currentMetadata.value = null;
+          } else {
+            currentMetadata.value = title;
+          }
+        }
       }
     });
   }
@@ -160,6 +188,7 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> playUrl(String url) async {
     final currentToken = ++_playRequestToken;
     _lastError = '';
+    currentMetadata.value = null;
 
     if (_player == null) {
       await init();
@@ -205,6 +234,7 @@ class AudioPlayerService extends ChangeNotifier {
 
   Future<void> stop() async {
     _playRequestToken++;
+    currentMetadata.value = null;
     if (_player != null) {
       await _player!.stop();
       _setState(AudioPlayerState.stopped);
@@ -226,6 +256,7 @@ class AudioPlayerService extends ChangeNotifier {
     _completedSub?.cancel();
     _errorSub?.cancel();
     _logSub?.cancel();
+    _trackSub?.cancel();
     _smtcSub?.cancel();
 
     _playingSub = null;
@@ -233,7 +264,10 @@ class AudioPlayerService extends ChangeNotifier {
     _completedSub = null;
     _errorSub = null;
     _logSub = null;
+    _trackSub = null;
     _smtcSub = null;
+
+    currentMetadata.dispose();
 
     _smtc?.dispose();
     _smtc = null;
