@@ -5,6 +5,7 @@ import 'package:smtc_windows/smtc_windows.dart';
 import 'package:open_station/controllers/directory_controller.dart';
 import 'package:open_station/services/audio_player_service.dart';
 import 'package:open_station/services/bookmark_service.dart';
+import 'package:open_station/services/recent_stations_service.dart';
 import 'package:open_station/theme/app_theme.dart';
 import 'package:open_station/ui/app_shell.dart';
 
@@ -19,6 +20,9 @@ void main() async {
   final bookmarkService = BookmarkService();
   await bookmarkService.init();
 
+  final recentStationsService = RecentStationsService();
+  await recentStationsService.init();
+
   // Load stored volume setting into player service
   audioService.setVolume(bookmarkService.lastVolume);
 
@@ -29,7 +33,12 @@ void main() async {
       providers: [
         ChangeNotifierProvider<AudioPlayerService>(create: (_) => audioService),
         ChangeNotifierProvider<BookmarkService>(create: (_) => bookmarkService),
-        ChangeNotifierProvider<DirectoryController>(create: (_) => directoryController),
+        ChangeNotifierProvider<RecentStationsService>(
+          create: (_) => recentStationsService,
+        ),
+        ChangeNotifierProvider<DirectoryController>(
+          create: (_) => directoryController,
+        ),
       ],
       child: MaterialApp(
         title: 'Open Station',

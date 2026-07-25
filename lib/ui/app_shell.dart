@@ -32,10 +32,7 @@ class _AppShellState extends State<AppShell> {
                 Expanded(
                   child: IndexedStack(
                     index: _activeTab == NavigationTab.discover ? 0 : 1,
-                    children: const [
-                      DiscoverPage(),
-                      BookmarksPage(),
-                    ],
+                    children: const [DiscoverPage(), BookmarksPage()],
                   ),
                 ),
               ],

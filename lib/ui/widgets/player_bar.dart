@@ -18,7 +18,9 @@ class PlayerBar extends StatelessWidget {
     final isPlaying = state == AudioPlayerState.playing;
     final isConnecting = state == AudioPlayerState.connecting;
     final isFailed = state == AudioPlayerState.failed;
-    final isBookmarked = currentStation != null && bookmarkService.isBookmarked(currentStation.uuid);
+    final isBookmarked =
+        currentStation != null &&
+        bookmarkService.isBookmarked(currentStation.uuid);
 
     return Container(
       height: 88,
@@ -58,14 +60,21 @@ class PlayerBar extends StatelessWidget {
                             const SizedBox(height: 2),
                             Text(
                               isFailed
-                                  ? (playerService.lastError.isNotEmpty ? playerService.lastError : 'Playback failed')
-                                  : (currentStation.countryCode ?? currentStation.tags.take(2).join(', ')),
+                                  ? (playerService.lastError.isNotEmpty
+                                        ? playerService.lastError
+                                        : 'Playback failed')
+                                  : (currentStation.countryCode ??
+                                        currentStation.tags.take(2).join(', ')),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: isFailed ? AppColors.error : AppColors.secondaryText,
+                                color: isFailed
+                                    ? AppColors.error
+                                    : AppColors.secondaryText,
                                 fontSize: 12,
-                                fontWeight: isFailed ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: isFailed
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
                           ],
@@ -74,12 +83,16 @@ class PlayerBar extends StatelessWidget {
                       IconButton(
                         icon: Icon(
                           isBookmarked ? Icons.favorite : Icons.favorite_border,
-                          color: isBookmarked ? AppColors.openGreen : AppColors.mutedText,
+                          color: isBookmarked
+                              ? AppColors.openGreen
+                              : AppColors.mutedText,
                         ),
                         onPressed: () {
                           bookmarkService.toggleBookmark(currentStation);
                         },
-                        tooltip: isBookmarked ? 'Remove Bookmark' : 'Add Bookmark',
+                        tooltip: isBookmarked
+                            ? 'Remove Bookmark'
+                            : 'Add Bookmark',
                       ),
                     ],
                   )
@@ -90,7 +103,10 @@ class PlayerBar extends StatelessWidget {
                       Expanded(
                         child: Text(
                           'No station selected',
-                          style: TextStyle(color: AppColors.mutedText, fontSize: 14),
+                          style: TextStyle(
+                            color: AppColors.mutedText,
+                            fontSize: 14,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -107,7 +123,9 @@ class PlayerBar extends StatelessWidget {
                 // Stop button
                 IconButton(
                   icon: const Icon(Icons.stop, color: AppColors.secondaryText),
-                  onPressed: currentStation != null && state != AudioPlayerState.stopped
+                  onPressed:
+                      currentStation != null &&
+                          state != AudioPlayerState.stopped
                       ? () => playerService.stop()
                       : null,
                   tooltip: 'Stop',
@@ -169,7 +187,9 @@ class PlayerBar extends StatelessWidget {
                   icon: Icon(
                     playerService.volume == 0
                         ? Icons.volume_off
-                        : (playerService.volume < 0.5 ? Icons.volume_down : Icons.volume_up),
+                        : (playerService.volume < 0.5
+                              ? Icons.volume_down
+                              : Icons.volume_up),
                     color: AppColors.secondaryText,
                     size: 20,
                   ),
@@ -189,7 +209,9 @@ class PlayerBar extends StatelessWidget {
                       inactiveTrackColor: AppColors.raisedSlate,
                       thumbColor: AppColors.primaryText,
                       trackHeight: 4,
-                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 6,
+                      ),
                     ),
                     child: Slider(
                       value: playerService.volume,

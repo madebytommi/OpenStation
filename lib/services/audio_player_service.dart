@@ -3,13 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart' hide PlayerState;
 import 'package:smtc_windows/smtc_windows.dart';
 import 'package:open_station/models/station.dart';
+import 'package:open_station/services/recent_stations_service.dart';
 
 enum AudioPlayerState { idle, connecting, playing, paused, stopped, failed }
 
 class AudioPlayerService extends ChangeNotifier {
   static final AudioPlayerService _instance = AudioPlayerService._internal();
   factory AudioPlayerService() => _instance;
-  
+
   Player? _player;
   AudioPlayerState _state = AudioPlayerState.idle;
   Station? _currentStation;
@@ -22,7 +23,7 @@ class AudioPlayerService extends ChangeNotifier {
   StreamSubscription? _completedSub;
   StreamSubscription? _errorSub;
   StreamSubscription? _logSub;
-  
+
   SMTCWindows? _smtc;
   StreamSubscription? _smtcSub;
 
@@ -67,15 +68,21 @@ class AudioPlayerService extends ChangeNotifier {
 
   Future<void> init() async {
     if (_player != null) return;
-    
-    _player = Player(configuration: const PlayerConfiguration(logLevel: MPVLogLevel.trace));
+
+    _player = Player(
+      configuration: const PlayerConfiguration(logLevel: MPVLogLevel.trace),
+    );
 
     _playingSub = _player!.stream.playing.listen((playing) {
       if (playing) {
         if (!_player!.state.buffering) {
           _setState(AudioPlayerState.playing);
+          if (_currentStation != null) {
+            RecentStationsService().addRecentStation(_currentStation!);
+          }
         }
-      } else if (_state == AudioPlayerState.playing || _state == AudioPlayerState.connecting) {
+      } else if (_state == AudioPlayerState.playing ||
+          _state == AudioPlayerState.connecting) {
         _setState(AudioPlayerState.paused);
       }
     });
@@ -102,7 +109,9 @@ class AudioPlayerService extends ChangeNotifier {
     });
 
     _logSub = _player!.stream.log.listen((event) {
-      if (event.level == 'error' || event.text.toLowerCase().contains('error') || event.text.toLowerCase().contains('failed')) {
+      if (event.level == 'error' ||
+          event.text.toLowerCase().contains('error') ||
+          event.text.toLowerCase().contains('failed')) {
         _lastError = event.text;
         notifyListeners();
       }
@@ -139,20 +148,19 @@ class AudioPlayerService extends ChangeNotifier {
 
     if (_smtc != null) {
       await _smtc!.updateMetadata(
-        MusicMetadata(
-          title: station.name,
-          artist: 'Open Station',
-        ),
+        MusicMetadata(title: station.name, artist: 'Open Station'),
       );
     }
 
-    await playUrl(station.resolvedUrl.isNotEmpty ? station.resolvedUrl : station.url);
+    await playUrl(
+      station.resolvedUrl.isNotEmpty ? station.resolvedUrl : station.url,
+    );
   }
 
   Future<void> playUrl(String url) async {
     final currentToken = ++_playRequestToken;
     _lastError = '';
-    
+
     if (_player == null) {
       await init();
     } else {
@@ -162,16 +170,18 @@ class AudioPlayerService extends ChangeNotifier {
     if (currentToken != _playRequestToken) return;
 
     _setState(AudioPlayerState.connecting);
-    
+
     try {
-      await _player!.open(Media(url, httpHeaders: {'User-Agent': 'OpenStation/0.1'}));
-      
+      await _player!.open(
+        Media(url, httpHeaders: {'User-Agent': 'OpenStation/0.1'}),
+      );
+
       if (currentToken != _playRequestToken) {
         await _player!.stop();
         return;
       }
-      
-      await _player!.setVolume(_volume * 100); 
+
+      await _player!.setVolume(_volume * 100);
     } catch (e) {
       if (currentToken != _playRequestToken) return;
       _lastError = e.toString();
@@ -217,7 +227,7 @@ class AudioPlayerService extends ChangeNotifier {
     _errorSub?.cancel();
     _logSub?.cancel();
     _smtcSub?.cancel();
-    
+
     _playingSub = null;
     _bufferingSub = null;
     _completedSub = null;

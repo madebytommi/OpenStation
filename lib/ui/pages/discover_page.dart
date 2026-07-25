@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:open_station/controllers/directory_controller.dart';
 import 'package:open_station/theme/app_theme.dart';
 import 'package:open_station/ui/widgets/station_card.dart';
+import 'package:open_station/services/recent_stations_service.dart';
+import 'package:open_station/models/station.dart';
 
 const List<String> popularTags = [
   'jazz',
@@ -46,6 +48,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<DirectoryController>();
+    final recentService = context.watch<RecentStationsService>();
+    final recentStations = recentService.recentStations;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
@@ -94,7 +98,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
               children: [
                 FilterChip(
                   label: const Text('All Popular'),
-                  selected: controller.selectedTag == null && controller.searchQuery.isEmpty,
+                  selected:
+                      controller.selectedTag == null &&
+                      controller.searchQuery.isEmpty,
                   onSelected: (_) {
                     _searchController.clear();
                     controller.loadPopularStations();
@@ -121,10 +127,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
           const SizedBox(height: 20),
 
+          // Recently Played Section
+          _buildRecentStations(recentStations),
+
           // Main Body Content (Grid, Loading, or Error)
-          Expanded(
-            child: _buildBody(controller),
-          ),
+          Expanded(child: _buildBody(controller)),
         ],
       ),
     );
@@ -231,6 +238,40 @@ class _DiscoverPageState extends State<DiscoverPage> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildRecentStations(List<Station> recentStations) {
+    if (recentStations.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Recently Played',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: AppColors.primaryText,
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 100, // Matching aspect ratio for 320 width
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: recentStations.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 16),
+            itemBuilder: (context, index) {
+              return SizedBox(
+                width: 320,
+                child: StationCard(station: recentStations[index]),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 }

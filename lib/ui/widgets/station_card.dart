@@ -17,8 +17,10 @@ class StationCard extends StatelessWidget {
     final bookmarkService = context.watch<BookmarkService>();
 
     final isCurrentStation = playerService.currentStation?.uuid == station.uuid;
-    final isPlaying = isCurrentStation && playerService.state == AudioPlayerState.playing;
-    final isConnecting = isCurrentStation && playerService.state == AudioPlayerState.connecting;
+    final isPlaying =
+        isCurrentStation && playerService.state == AudioPlayerState.playing;
+    final isConnecting =
+        isCurrentStation && playerService.state == AudioPlayerState.connecting;
     final isBookmarked = bookmarkService.isBookmarked(station.uuid);
 
     return Card(
@@ -40,10 +42,7 @@ class StationCard extends StatelessWidget {
           child: Row(
             children: [
               // Artwork
-              StationArtwork(
-                faviconUrl: station.faviconUrl,
-                size: 56,
-              ),
+              StationArtwork(faviconUrl: station.faviconUrl, size: 56),
               const SizedBox(width: 12),
 
               // Title and Subtitle Info
@@ -60,7 +59,9 @@ class StationCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: isCurrentStation ? AppColors.openGreen : AppColors.primaryText,
+                        color: isCurrentStation
+                            ? AppColors.openGreen
+                            : AppColors.primaryText,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -68,7 +69,10 @@ class StationCard extends StatelessWidget {
                       children: [
                         if (station.codec != null) ...[
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.raisedSlate,
                               borderRadius: BorderRadius.circular(4),
@@ -110,7 +114,9 @@ class StationCard extends StatelessWidget {
                   IconButton(
                     icon: Icon(
                       isBookmarked ? Icons.favorite : Icons.favorite_border,
-                      color: isBookmarked ? AppColors.openGreen : AppColors.mutedText,
+                      color: isBookmarked
+                          ? AppColors.openGreen
+                          : AppColors.mutedText,
                     ),
                     onPressed: () {
                       context.read<BookmarkService>().toggleBookmark(station);
@@ -128,14 +134,19 @@ class StationCard extends StatelessWidget {
                             ),
                           )
                         : Icon(
-                            isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                            color: isCurrentStation ? AppColors.openGreen : AppColors.signalBlue,
+                            isPlaying
+                                ? Icons.pause_circle_filled
+                                : Icons.play_circle_filled,
+                            color: isCurrentStation
+                                ? AppColors.openGreen
+                                : AppColors.signalBlue,
                             size: 32,
                           ),
                     onPressed: () {
                       if (isPlaying) {
                         context.read<AudioPlayerService>().pause();
-                      } else if (isCurrentStation && playerService.state == AudioPlayerState.paused) {
+                      } else if (isCurrentStation &&
+                          playerService.state == AudioPlayerState.paused) {
                         context.read<AudioPlayerService>().resume();
                       } else {
                         context.read<AudioPlayerService>().playStation(station);

@@ -107,10 +107,7 @@ class Sidebar extends StatelessWidget {
                 SizedBox(height: 2),
                 Text(
                   'v0.1.0 MVP',
-                  style: TextStyle(
-                    color: AppColors.disabledText,
-                    fontSize: 10,
-                  ),
+                  style: TextStyle(color: AppColors.disabledText, fontSize: 10),
                 ),
               ],
             ),
@@ -139,10 +136,14 @@ class Sidebar extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: isSelected ? AppColors.signalBlue.withValues(alpha: 0.15) : Colors.transparent,
+              color: isSelected
+                  ? AppColors.signalBlue.withValues(alpha: 0.15)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
               border: isSelected
-                  ? const Border(left: BorderSide(color: AppColors.signalBlue, width: 3))
+                  ? const Border(
+                      left: BorderSide(color: AppColors.signalBlue, width: 3),
+                    )
                   : null,
             ),
             child: Row(
@@ -150,7 +151,9 @@ class Sidebar extends StatelessWidget {
                 Icon(
                   icon,
                   size: 20,
-                  color: isSelected ? AppColors.signalBlue : AppColors.secondaryText,
+                  color: isSelected
+                      ? AppColors.signalBlue
+                      : AppColors.secondaryText,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -158,16 +161,25 @@ class Sidebar extends StatelessWidget {
                     label,
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? AppColors.primaryText : AppColors.secondaryText,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      color: isSelected
+                          ? AppColors.primaryText
+                          : AppColors.secondaryText,
                     ),
                   ),
                 ),
                 if (badgeCount != null && badgeCount > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColors.signalBlue : AppColors.raisedSlate,
+                      color: isSelected
+                          ? AppColors.signalBlue
+                          : AppColors.raisedSlate,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(

@@ -29,7 +29,10 @@ class BookmarksPage extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.openGreen.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
@@ -60,7 +63,11 @@ class BookmarksPage extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.favorite_border, size: 56, color: AppColors.mutedText),
+                        Icon(
+                          Icons.favorite_border,
+                          size: 56,
+                          color: AppColors.mutedText,
+                        ),
                         SizedBox(height: 16),
                         Text(
                           'No Bookmarks Yet',
@@ -81,7 +88,9 @@ class BookmarksPage extends StatelessWidget {
                   )
                 : LayoutBuilder(
                     builder: (context, constraints) {
-                      final crossAxisCount = (constraints.maxWidth / 360).floor().clamp(1, 4);
+                      final crossAxisCount = (constraints.maxWidth / 360)
+                          .floor()
+                          .clamp(1, 4);
                       return GridView.builder(
                         itemCount: bookmarks.length,
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

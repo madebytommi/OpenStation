@@ -53,11 +53,7 @@ class StationArtwork extends StatelessWidget {
                 color: AppColors.signalBlue,
               ),
             )
-          : Icon(
-              Icons.radio,
-              size: size * 0.5,
-              color: AppColors.mutedText,
-            ),
+          : Icon(Icons.radio, size: size * 0.5, color: AppColors.mutedText),
     );
   }
 }

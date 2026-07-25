@@ -39,11 +39,14 @@ void main() {
       }
     });
 
-    test('starts with empty list and default volume when file is missing', () async {
-      await service.init();
-      expect(service.bookmarks, isEmpty);
-      expect(service.lastVolume, 1.0);
-    });
+    test(
+      'starts with empty list and default volume when file is missing',
+      () async {
+        await service.init();
+        expect(service.bookmarks, isEmpty);
+        expect(service.lastVolume, 1.0);
+      },
+    );
 
     test('starts with empty list when file is completely empty', () async {
       tmpFile.writeAsStringSync('');
@@ -83,10 +86,15 @@ void main() {
     test('prevents duplicate UUIDs from being added', () async {
       await service.init();
       await service.addBookmark(testStation1);
-      
+
       // Attempt to add duplicate
       await service.addBookmark(
-        const Station(uuid: 'uuid-1', name: 'Duplicate Name', url: 'http://duplicate', resolvedUrl: 'http://duplicate')
+        const Station(
+          uuid: 'uuid-1',
+          name: 'Duplicate Name',
+          url: 'http://duplicate',
+          resolvedUrl: 'http://duplicate',
+        ),
       );
 
       expect(service.bookmarks.length, 1);
@@ -96,12 +104,12 @@ void main() {
     test('handles corrupted or malformed JSON gracefully', () async {
       // Write garbage to file
       tmpFile.writeAsStringSync('{ corrupted json...]');
-      
+
       await service.init();
-      
+
       // Should not throw, should just be empty
       expect(service.bookmarks, isEmpty);
-      
+
       // Should still be able to save new data
       await service.addBookmark(testStation1);
       expect(service.bookmarks.length, 1);
@@ -112,47 +120,47 @@ void main() {
         'volume': 0.5,
         'bookmarks': [
           testStation1.toJson(),
-          { 'name': 'Missing UUID Station' }, // Invalid format
+          {'name': 'Missing UUID Station'}, // Invalid format
           testStation2.toJson(),
-        ]
+        ],
       };
-      
+
       tmpFile.writeAsStringSync(jsonEncode(badData));
-      
+
       await service.init();
-      
+
       expect(service.lastVolume, 0.5);
-      expect(service.bookmarks.length, 2); // Station 1 and 2 loaded, bad entry ignored
+      expect(
+        service.bookmarks.length,
+        2,
+      ); // Station 1 and 2 loaded, bad entry ignored
       expect(service.bookmarks[0].uuid, 'uuid-1');
       expect(service.bookmarks[1].uuid, 'uuid-2');
     });
-    
+
     test('filters out duplicate UUIDs during initial load', () async {
       final duplicateData = {
         'volume': 1.0,
-        'bookmarks': [
-          testStation1.toJson(),
-          testStation1.toJson(),
-        ]
+        'bookmarks': [testStation1.toJson(), testStation1.toJson()],
       };
-      
+
       tmpFile.writeAsStringSync(jsonEncode(duplicateData));
-      
+
       await service.init();
-      
+
       expect(service.bookmarks.length, 1);
       expect(service.bookmarks.first.uuid, 'uuid-1');
     });
 
     test('saves and clamps volume', () async {
       await service.init();
-      
+
       await service.setVolume(0.8);
       expect(service.lastVolume, 0.8);
-      
+
       await service.setVolume(1.5); // Over bounds
       expect(service.lastVolume, 1.0);
-      
+
       await service.setVolume(-0.5); // Under bounds
       expect(service.lastVolume, 0.0);
 

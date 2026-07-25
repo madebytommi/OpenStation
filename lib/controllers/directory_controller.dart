@@ -17,7 +17,7 @@ class DirectoryController extends ChangeNotifier {
   int _requestToken = 0;
 
   DirectoryController({RadioBrowserService? service})
-      : _service = service ?? RadioBrowserService();
+    : _service = service ?? RadioBrowserService();
 
   List<Station> get stations => List.unmodifiable(_stations);
   bool get isLoading => _isLoading;
@@ -76,7 +76,9 @@ class DirectoryController extends ChangeNotifier {
     }
   }
 
-  Future<void> _executeFetch(Future<List<dynamic>> Function() fetchAction) async {
+  Future<void> _executeFetch(
+    Future<List<dynamic>> Function() fetchAction,
+  ) async {
     final currentToken = ++_requestToken;
     _isLoading = true;
     _errorMessage = null;

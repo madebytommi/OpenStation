@@ -6,19 +6,18 @@ import 'package:open_station/models/station.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
-class BookmarkService extends ChangeNotifier {
-  static final BookmarkService _instance = BookmarkService._internal();
-  factory BookmarkService() => _instance;
-  BookmarkService._internal();
+class RecentStationsService extends ChangeNotifier {
+  static final RecentStationsService _instance =
+      RecentStationsService._internal();
+  factory RecentStationsService() => _instance;
+  RecentStationsService._internal();
 
   File? _storageFile;
-  final List<Station> _bookmarks = [];
-  double _lastVolume = 1.0;
+  final List<Station> _recentStations = [];
   Completer<void>? _saveLock;
   bool _loadFailed = false;
 
-  List<Station> get bookmarks => List.unmodifiable(_bookmarks);
-  double get lastVolume => _lastVolume;
+  List<Station> get recentStations => List.unmodifiable(_recentStations);
 
   @visibleForTesting
   File? customStorageFile;
@@ -32,7 +31,7 @@ class BookmarkService extends ChangeNotifier {
       if (!await folder.exists()) {
         await folder.create(recursive: true);
       }
-      _storageFile = File(p.join(folder.path, 'bookmarks.json'));
+      _storageFile = File(p.join(folder.path, 'recent_stations.json'));
     }
 
     await _loadFromDisk();
@@ -50,26 +49,27 @@ class BookmarkService extends ChangeNotifier {
       final dynamic data = jsonDecode(jsonString);
       if (data is! Map<String, dynamic>) return;
 
-      if (data['volume'] is num) {
-        _lastVolume = (data['volume'] as num).toDouble().clamp(0.0, 1.0);
-      }
-
-      if (data['bookmarks'] is List) {
-        final List<dynamic> rawList = data['bookmarks'];
-        _bookmarks.clear();
+      if (data['recentStations'] is List) {
+        final List<dynamic> rawList = data['recentStations'];
+        _recentStations.clear();
         for (final item in rawList) {
           final station = Station.tryFromJson(item);
           if (station != null) {
-            if (!_bookmarks.any((b) => b.uuid == station.uuid)) {
-              _bookmarks.add(station);
+            if (!_recentStations.any((b) => b.uuid == station.uuid)) {
+              _recentStations.add(station);
             }
           }
+        }
+
+        // Enforce the 10 limit just in case a corrupted file had more
+        while (_recentStations.length > 10) {
+          _recentStations.removeLast();
         }
       }
       notifyListeners();
     } catch (e) {
       _loadFailed = true;
-      debugPrint('Error loading bookmarks: $e');
+      debugPrint('Error loading recent stations: $e');
     }
   }
 
@@ -84,8 +84,7 @@ class BookmarkService extends ChangeNotifier {
 
     try {
       final data = {
-        'volume': _lastVolume,
-        'bookmarks': _bookmarks.map((s) => s.toJson()).toList(),
+        'recentStations': _recentStations.map((s) => s.toJson()).toList(),
       };
 
       final jsonString = jsonEncode(data);
@@ -100,7 +99,7 @@ class BookmarkService extends ChangeNotifier {
         await tmpFile.delete();
       }
     } catch (e) {
-      debugPrint('Failed to save bookmarks atomically: $e');
+      debugPrint('Failed to save recent stations atomically: $e');
     } finally {
       final lock = _saveLock;
       _saveLock = null;
@@ -108,48 +107,29 @@ class BookmarkService extends ChangeNotifier {
     }
   }
 
-  Future<void> addBookmark(Station station) async {
-    if (!_bookmarks.any((b) => b.uuid == station.uuid)) {
-      _bookmarks.add(station);
-      notifyListeners();
-      await _saveToDisk();
-    }
-  }
+  Future<void> addRecentStation(Station station) async {
+    final index = _recentStations.indexWhere((s) => s.uuid == station.uuid);
 
-  Future<void> removeBookmark(String uuid) async {
-    final initialLength = _bookmarks.length;
-    _bookmarks.removeWhere((b) => b.uuid == uuid);
-    if (_bookmarks.length != initialLength) {
-      notifyListeners();
-      await _saveToDisk();
+    if (index != -1) {
+      // If it exists, remove it from its current position
+      _recentStations.removeAt(index);
     }
-  }
 
-  Future<void> toggleBookmark(Station station) async {
-    if (isBookmarked(station.uuid)) {
-      await removeBookmark(station.uuid);
-    } else {
-      await addBookmark(station);
+    // Insert at the top (most recent)
+    _recentStations.insert(0, station);
+
+    // Enforce exactly 10 limit by removing the oldest from the end
+    while (_recentStations.length > 10) {
+      _recentStations.removeLast();
     }
-  }
 
-  bool isBookmarked(String uuid) {
-    return _bookmarks.any((b) => b.uuid == uuid);
-  }
-
-  Future<void> setVolume(double volume) async {
-    final clamped = volume.clamp(0.0, 1.0);
-    if (_lastVolume != clamped) {
-      _lastVolume = clamped;
-      notifyListeners();
-      await _saveToDisk();
-    }
+    notifyListeners();
+    await _saveToDisk();
   }
 
   @visibleForTesting
   void clearMemory() {
-    _bookmarks.clear();
-    _lastVolume = 1.0;
+    _recentStations.clear();
     _loadFailed = false;
     notifyListeners();
   }
