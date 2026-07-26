@@ -170,6 +170,74 @@ class RadioBrowserService {
     );
   }
 
+  /// Search stations by name and tag in parallel, merging and deduplicating results.
+  Future<List<dynamic>> searchByNameOrTag(
+    String query, {
+    int limit = 50,
+    Duration timeout = defaultTimeout,
+  }) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return [];
+
+    List<dynamic>? nameResults;
+    List<dynamic>? tagResults;
+    Object? nameError;
+    Object? tagError;
+
+    await Future.wait([
+      searchByName(trimmed, limit: limit, timeout: timeout)
+          .then((res) {
+            nameResults = res;
+          })
+          .catchError((err) {
+            nameError = err;
+          }),
+      searchByTag(trimmed, limit: limit, timeout: timeout)
+          .then((res) {
+            tagResults = res;
+          })
+          .catchError((err) {
+            tagError = err;
+          }),
+    ]);
+
+    if (nameResults == null && tagResults == null) {
+      if (nameError is RadioBrowserException) {
+        throw nameError as RadioBrowserException;
+      } else if (tagError is RadioBrowserException) {
+        throw tagError as RadioBrowserException;
+      } else {
+        throw RadioBrowserException(
+          'Both name and tag search failed for "$trimmed".',
+          nameError ?? tagError,
+        );
+      }
+    }
+
+    final List<dynamic> merged = [];
+    final Set<String> seenUuids = {};
+
+    void addRecords(List<dynamic>? list) {
+      if (list == null) return;
+      for (final item in list) {
+        if (merged.length >= limit) break;
+        if (item is Map) {
+          final uuid = item['stationuuid']?.toString();
+          if (uuid != null && uuid.isNotEmpty) {
+            if (seenUuids.contains(uuid)) continue;
+            seenUuids.add(uuid);
+          }
+        }
+        merged.add(item);
+      }
+    }
+
+    addRecords(nameResults);
+    addRecords(tagResults);
+
+    return merged;
+  }
+
   void dispose() {
     _client.close();
   }

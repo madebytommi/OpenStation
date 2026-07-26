@@ -3,6 +3,20 @@ import 'package:flutter/foundation.dart';
 import 'package:open_station/models/station.dart';
 import 'package:open_station/services/radio_browser_service.dart';
 
+sealed class _DirectoryRequest {}
+
+class _PopularRequest extends _DirectoryRequest {}
+
+class _TypedSearchRequest extends _DirectoryRequest {
+  final String query;
+  _TypedSearchRequest(this.query);
+}
+
+class _TagRequest extends _DirectoryRequest {
+  final String tag;
+  _TagRequest(this.tag);
+}
+
 class DirectoryController extends ChangeNotifier {
   final RadioBrowserService _service;
 
@@ -15,6 +29,7 @@ class DirectoryController extends ChangeNotifier {
 
   Timer? _debounceTimer;
   int _requestToken = 0;
+  _DirectoryRequest _lastRequest = _PopularRequest();
 
   DirectoryController({RadioBrowserService? service})
     : _service = service ?? RadioBrowserService();
@@ -28,6 +43,8 @@ class DirectoryController extends ChangeNotifier {
   Future<void> loadPopularStations() async {
     _searchQuery = '';
     _selectedTag = null;
+    _debounceTimer?.cancel();
+    _lastRequest = _PopularRequest();
     await _executeFetch(() => _service.getPopularStations(limit: 24));
   }
 
@@ -36,14 +53,17 @@ class DirectoryController extends ChangeNotifier {
     _selectedTag = null;
     _debounceTimer?.cancel();
 
-    if (query.trim().isEmpty) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
       loadPopularStations();
       return;
     }
 
+    _lastRequest = _TypedSearchRequest(trimmed);
+
     // Spike 10: 300ms debounce
     _debounceTimer = Timer(const Duration(milliseconds: 300), () {
-      _executeFetch(() => _service.searchByName(query.trim(), limit: 50));
+      _executeFetch(() => _service.searchByNameOrTag(trimmed, limit: 50));
     });
   }
 
@@ -63,16 +83,19 @@ class DirectoryController extends ChangeNotifier {
       return;
     }
 
+    _lastRequest = _TagRequest(tag);
     _executeFetch(() => _service.searchByTag(tag, limit: 50));
   }
 
   Future<void> retry() async {
-    if (_selectedTag != null) {
-      selectTag(_selectedTag);
-    } else if (_searchQuery.isNotEmpty) {
-      onSearchChanged(_searchQuery);
-    } else {
-      loadPopularStations();
+    _debounceTimer?.cancel();
+    switch (_lastRequest) {
+      case _PopularRequest():
+        await _executeFetch(() => _service.getPopularStations(limit: 24));
+      case _TypedSearchRequest(:final query):
+        await _executeFetch(() => _service.searchByNameOrTag(query, limit: 50));
+      case _TagRequest(:final tag):
+        await _executeFetch(() => _service.searchByTag(tag, limit: 50));
     }
   }
 

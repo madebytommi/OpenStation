@@ -168,5 +168,146 @@ void main() {
         throwsA(isA<RadioBrowserException>()),
       );
     });
+
+    group('searchByNameOrTag Unit Tests', () {
+      test(
+        'Merges name and tag results with name results first and deduplicates UUIDs',
+        () async {
+          final mockClient = MockClient((request) async {
+            if (request.url.queryParameters['name'] == 'jazz') {
+              return http.Response(
+                jsonEncode([
+                  {'stationuuid': 'uuid-1', 'name': 'Jazz Name 1'},
+                  {'stationuuid': 'uuid-2', 'name': 'Jazz Name 2'},
+                ]),
+                200,
+              );
+            }
+            if (request.url.queryParameters['tag'] == 'jazz') {
+              return http.Response(
+                jsonEncode([
+                  {'stationuuid': 'uuid-2', 'name': 'Jazz Tag Duplicate'},
+                  {'stationuuid': 'uuid-3', 'name': 'Jazz Tag Unique'},
+                ]),
+                200,
+              );
+            }
+            return http.Response('Not Found', 404);
+          });
+
+          final service = RadioBrowserService(client: mockClient);
+          service.setServers(['srv1.example.com']);
+
+          final results = await service.searchByNameOrTag('jazz');
+          expect(results.length, 3);
+          expect(results[0]['stationuuid'], 'uuid-1');
+          expect(results[1]['stationuuid'], 'uuid-2');
+          expect(results[2]['stationuuid'], 'uuid-3');
+        },
+      );
+
+      test('Caps combined result at 50', () async {
+        final mockClient = MockClient((request) async {
+          final list = List.generate(
+            40,
+            (i) => {'stationuuid': 'id-$i', 'name': 'Station $i'},
+          );
+          if (request.url.queryParameters['name'] == 'pop') {
+            return http.Response(jsonEncode(list), 200);
+          }
+          if (request.url.queryParameters['tag'] == 'pop') {
+            final tagList = List.generate(
+              40,
+              (i) => {'stationuuid': 'tag-id-$i', 'name': 'Tag Station $i'},
+            );
+            return http.Response(jsonEncode(tagList), 200);
+          }
+          return http.Response('Not Found', 404);
+        });
+
+        final service = RadioBrowserService(client: mockClient);
+        service.setServers(['srv1.example.com']);
+
+        final results = await service.searchByNameOrTag('pop', limit: 50);
+        expect(results.length, 50);
+      });
+
+      test(
+        'Name success plus tag failure returns name results without throwing',
+        () async {
+          final mockClient = MockClient((request) async {
+            if (request.url.queryParameters.containsKey('name')) {
+              return http.Response(
+                jsonEncode([
+                  {'stationuuid': 'name-1', 'name': 'Name Station'},
+                ]),
+                200,
+              );
+            }
+            return http.Response('Internal Error', 500);
+          });
+
+          final service = RadioBrowserService(client: mockClient);
+          service.setServers(['srv1.example.com']);
+
+          final results = await service.searchByNameOrTag('test');
+          expect(results.length, 1);
+          expect(results.first['name'], 'Name Station');
+        },
+      );
+
+      test(
+        'Tag success plus name failure returns tag results without throwing',
+        () async {
+          final mockClient = MockClient((request) async {
+            if (request.url.queryParameters.containsKey('tag')) {
+              return http.Response(
+                jsonEncode([
+                  {'stationuuid': 'tag-1', 'name': 'Tag Station'},
+                ]),
+                200,
+              );
+            }
+            return http.Response('Internal Error', 500);
+          });
+
+          final service = RadioBrowserService(client: mockClient);
+          service.setServers(['srv1.example.com']);
+
+          final results = await service.searchByNameOrTag('test');
+          expect(results.length, 1);
+          expect(results.first['name'], 'Tag Station');
+        },
+      );
+
+      test('Both failures throw RadioBrowserException', () async {
+        final mockClient = MockClient((request) async {
+          return http.Response('Server Error', 500);
+        });
+
+        final service = RadioBrowserService(client: mockClient);
+        service.setServers(['srv1.example.com']);
+
+        expect(
+          () => service.searchByNameOrTag('test'),
+          throwsA(isA<RadioBrowserException>()),
+        );
+      });
+
+      test('Correctly URL encodes search term', () async {
+        final mockClient = MockClient((request) async {
+          if (request.url.queryParameters['name'] == 'rock & roll') {
+            return http.Response(jsonEncode([]), 200);
+          }
+          return http.Response('Not Found', 404);
+        });
+
+        final service = RadioBrowserService(client: mockClient);
+        service.setServers(['srv1.example.com']);
+
+        final results = await service.searchByNameOrTag('rock & roll');
+        expect(results, isEmpty);
+      });
+    });
   });
 }
