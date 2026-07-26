@@ -174,9 +174,7 @@ void main() {
     });
 
     test('3: resolved timeout falls back to original', () async {
-      final service = createService(
-        timeout: const Duration(milliseconds: 15),
-      );
+      final service = createService(timeout: const Duration(milliseconds: 15));
       adapter.onOpen = (media) async {
         if (media.uri == stationA.url) {
           scheduleMicrotask(() => adapter.emitPlaying(true));
@@ -189,25 +187,22 @@ void main() {
       expect(service.state, AudioPlayerState.playing);
     });
 
-    test(
-      '4: identical resolved and original URL is attempted once',
-      () async {
-        const station = Station(
-          uuid: 'same',
-          name: 'Same',
-          url: 'http://same.stream',
-          resolvedUrl: 'http://same.stream',
-        );
-        final service = createService();
-        adapter.onOpen = (_) async {
-          scheduleMicrotask(() => adapter.emitPlaying(true));
-        };
+    test('4: identical resolved and original URL is attempted once', () async {
+      const station = Station(
+        uuid: 'same',
+        name: 'Same',
+        url: 'http://same.stream',
+        resolvedUrl: 'http://same.stream',
+      );
+      final service = createService();
+      adapter.onOpen = (_) async {
+        scheduleMicrotask(() => adapter.emitPlaying(true));
+      };
 
-        await service.playStation(station);
+      await service.playStation(station);
 
-        expect(adapter.openedUrls, ['http://same.stream']);
-      },
-    );
+      expect(adapter.openedUrls, ['http://same.stream']);
+    });
 
     test('5: blank resolved URL attempts original directly', () async {
       const station = Station(
@@ -254,21 +249,24 @@ void main() {
       expect(service.lastError, AudioPlayerService.stableFailureMessage);
     });
 
-    test('8: resolved timeout plus original error makes no third attempt', () async {
-      final service = createService(
-        timeout: const Duration(milliseconds: 15),
-      );
-      adapter.onOpen = (media) async {
-        if (media.uri == stationA.url) {
-          scheduleMicrotask(() => adapter.emitError('original failed'));
-        }
-      };
+    test(
+      '8: resolved timeout plus original error makes no third attempt',
+      () async {
+        final service = createService(
+          timeout: const Duration(milliseconds: 15),
+        );
+        adapter.onOpen = (media) async {
+          if (media.uri == stationA.url) {
+            scheduleMicrotask(() => adapter.emitError('original failed'));
+          }
+        };
 
-      await service.playStation(stationA);
+        await service.playStation(stationA);
 
-      expect(adapter.openedUrls, [stationA.resolvedUrl, stationA.url]);
-      expect(service.state, AudioPlayerState.failed);
-    });
+        expect(adapter.openedUrls, [stationA.resolvedUrl, stationA.url]);
+        expect(service.state, AudioPlayerState.failed);
+      },
+    );
 
     test('9: one unique URL times out after one attempt', () async {
       const station = Station(
@@ -277,9 +275,7 @@ void main() {
         url: 'http://one.stream',
         resolvedUrl: 'http://one.stream',
       );
-      final service = createService(
-        timeout: const Duration(milliseconds: 15),
-      );
+      final service = createService(timeout: const Duration(milliseconds: 15));
 
       await service.playStation(station);
 
@@ -288,9 +284,7 @@ void main() {
     });
 
     test('10: Stop during connection prevents fallback', () async {
-      final service = createService(
-        timeout: const Duration(milliseconds: 100),
-      );
+      final service = createService(timeout: const Duration(milliseconds: 100));
 
       final playFuture = service.playStation(stationA);
       await Future<void>.delayed(const Duration(milliseconds: 5));
@@ -302,9 +296,7 @@ void main() {
     });
 
     test('11: newer station wins while first is connecting', () async {
-      final service = createService(
-        timeout: const Duration(milliseconds: 100),
-      );
+      final service = createService(timeout: const Duration(milliseconds: 100));
       adapter.onOpen = (media) async {
         if (media.uri == stationB.resolvedUrl) {
           scheduleMicrotask(() => adapter.emitPlaying(true));
@@ -322,9 +314,7 @@ void main() {
     });
 
     test('12: newer station wins while first is on fallback', () async {
-      final service = createService(
-        timeout: const Duration(milliseconds: 10),
-      );
+      final service = createService(timeout: const Duration(milliseconds: 10));
       adapter.onOpen = (media) async {
         if (media.uri == stationB.resolvedUrl) {
           scheduleMicrotask(() => adapter.emitPlaying(true));
@@ -360,9 +350,7 @@ void main() {
     });
 
     test('15: timeout does not record Recently Played', () async {
-      final service = createService(
-        timeout: const Duration(milliseconds: 10),
-      );
+      final service = createService(timeout: const Duration(milliseconds: 10));
       const station = Station(
         uuid: 'timeout',
         name: 'Timeout',
@@ -445,29 +433,32 @@ void main() {
       expect(service.currentMetadata.value, isNull);
     });
 
-    test('21: A plays, B replaces it, and stale error does not fail B', () async {
-      final service = createService();
-      adapter.onOpen = (_) async {
-        scheduleMicrotask(() => adapter.emitPlaying(true));
-      };
+    test(
+      '21: A plays, B replaces it, and stale error does not fail B',
+      () async {
+        final service = createService();
+        adapter.onOpen = (_) async {
+          scheduleMicrotask(() => adapter.emitPlaying(true));
+        };
 
-      await service.playStation(stationA);
-      expect(service.currentStation, stationA);
-      expect(service.state, AudioPlayerState.playing);
+        await service.playStation(stationA);
+        expect(service.currentStation, stationA);
+        expect(service.state, AudioPlayerState.playing);
 
-      await service.playStation(stationB);
-      expect(service.currentStation, stationB);
-      expect(service.state, AudioPlayerState.playing);
-      service.currentMetadata.value = 'B metadata';
+        await service.playStation(stationB);
+        expect(service.currentStation, stationB);
+        expect(service.state, AudioPlayerState.playing);
+        service.currentMetadata.value = 'B metadata';
 
-      adapter.emitError('late untagged error from A');
-      await waitForSettle();
+        adapter.emitError('late untagged error from A');
+        await waitForSettle();
 
-      expect(service.currentStation, stationB);
-      expect(service.state, AudioPlayerState.playing);
-      expect(service.currentMetadata.value, 'B metadata');
-      expect(service.lastError, isEmpty);
-    });
+        expect(service.currentStation, stationB);
+        expect(service.state, AudioPlayerState.playing);
+        expect(service.currentMetadata.value, 'B metadata');
+        expect(service.lastError, isEmpty);
+      },
+    );
 
     test('22: dedicated error is ignored while playback continues', () async {
       final service = createService();
@@ -562,11 +553,7 @@ void main() {
       await service.playStation(stationA);
 
       adapter.emitLog(
-        const PlayerLog(
-          prefix: 'test',
-          level: 'info',
-          text: 'icy-title:',
-        ),
+        const PlayerLog(prefix: 'test', level: 'info', text: 'icy-title:'),
       );
       await Future<void>.delayed(Duration.zero);
 
@@ -574,19 +561,22 @@ void main() {
       expect(service.currentMetadata.value, isNull);
     });
 
-    test('28: duplicate playing=true does not duplicate Recently Played', () async {
-      final service = createService();
-      adapter.onOpen = (_) async {
-        scheduleMicrotask(() => adapter.emitPlaying(true));
-      };
-      await service.playStation(stationA);
+    test(
+      '28: duplicate playing=true does not duplicate Recently Played',
+      () async {
+        final service = createService();
+        adapter.onOpen = (_) async {
+          scheduleMicrotask(() => adapter.emitPlaying(true));
+        };
+        await service.playStation(stationA);
 
-      adapter.emitPlaying(true);
-      adapter.emitPlaying(true);
-      await Future<void>.delayed(Duration.zero);
+        adapter.emitPlaying(true);
+        adapter.emitPlaying(true);
+        await Future<void>.delayed(Duration.zero);
 
-      expect(recentAdded, [stationA]);
-    });
+        expect(recentAdded, [stationA]);
+      },
+    );
 
     test('29: dispose makes late events inert', () async {
       final service = createService();
@@ -599,11 +589,7 @@ void main() {
       adapter.emitError('late error');
       adapter.emitPlaying(false);
       adapter.emitLog(
-        const PlayerLog(
-          prefix: 'test',
-          level: 'info',
-          text: 'icy-title: Song',
-        ),
+        const PlayerLog(prefix: 'test', level: 'info', text: 'icy-title: Song'),
       );
       await waitForSettle();
 
@@ -611,9 +597,7 @@ void main() {
     });
 
     test('30: playing=false while Connecting does not expose Paused', () async {
-      final service = createService(
-        timeout: const Duration(milliseconds: 15),
-      );
+      final service = createService(timeout: const Duration(milliseconds: 15));
       adapter.onOpen = (_) async {
         scheduleMicrotask(() => adapter.emitPlaying(false));
       };
