@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart' hide PlayerState;
 import 'package:provider/provider.dart';
-import 'package:smtc_windows/smtc_windows.dart';
 import 'package:open_station/controllers/directory_controller.dart';
 import 'package:open_station/services/audio_player_service.dart';
 import 'package:open_station/services/bookmark_service.dart';
@@ -12,7 +11,6 @@ import 'package:open_station/ui/app_shell.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
-  await SMTCWindows.initialize();
 
   final audioService = AudioPlayerService();
   await audioService.init();

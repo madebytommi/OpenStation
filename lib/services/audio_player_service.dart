@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart' hide PlayerState;
-import 'package:smtc_windows/smtc_windows.dart';
 import 'package:open_station/models/station.dart';
 import 'package:open_station/services/recent_stations_service.dart';
 
@@ -27,47 +26,12 @@ class AudioPlayerService extends ChangeNotifier {
 
   final ValueNotifier<String?> currentMetadata = ValueNotifier<String?>(null);
 
-  SMTCWindows? _smtc;
-  StreamSubscription? _smtcSub;
-
   AudioPlayerService._internal();
 
   AudioPlayerState get state => _state;
   Station? get currentStation => _currentStation;
   String get lastError => _lastError;
   double get volume => _volume;
-
-  void _initSmtc() {
-    if (_smtc != null) return;
-
-    _smtc = SMTCWindows(
-      config: const SMTCConfig(
-        playEnabled: true,
-        pauseEnabled: true,
-        stopEnabled: true,
-        nextEnabled: false,
-        prevEnabled: false,
-        fastForwardEnabled: false,
-        rewindEnabled: false,
-      ),
-    );
-
-    _smtcSub = _smtc!.buttonPressStream.listen((event) {
-      switch (event) {
-        case PressedButton.play:
-          resume();
-          break;
-        case PressedButton.pause:
-          pause();
-          break;
-        case PressedButton.stop:
-          stop();
-          break;
-        default:
-          break;
-      }
-    });
-  }
 
   Future<void> init() async {
     if (_player != null) return;
@@ -148,37 +112,11 @@ class AudioPlayerService extends ChangeNotifier {
 
   void _setState(AudioPlayerState s) {
     _state = s;
-    if (_smtc != null) {
-      switch (s) {
-        case AudioPlayerState.playing:
-          _smtc!.setPlaybackStatus(PlaybackStatus.playing);
-          break;
-        case AudioPlayerState.paused:
-          _smtc!.setPlaybackStatus(PlaybackStatus.paused);
-          break;
-        case AudioPlayerState.stopped:
-        case AudioPlayerState.failed:
-        case AudioPlayerState.idle:
-          _smtc!.setPlaybackStatus(PlaybackStatus.stopped);
-          break;
-        case AudioPlayerState.connecting:
-          // Ignore, keep current state while connecting
-          break;
-      }
-    }
     notifyListeners();
   }
 
   Future<void> playStation(Station station) async {
     _currentStation = station;
-
-    _initSmtc();
-
-    if (_smtc != null) {
-      await _smtc!.updateMetadata(
-        MusicMetadata(title: station.name, artist: 'Open Station'),
-      );
-    }
 
     await playUrl(
       station.resolvedUrl.isNotEmpty ? station.resolvedUrl : station.url,
@@ -257,7 +195,6 @@ class AudioPlayerService extends ChangeNotifier {
     _errorSub?.cancel();
     _logSub?.cancel();
     _trackSub?.cancel();
-    _smtcSub?.cancel();
 
     _playingSub = null;
     _bufferingSub = null;
@@ -265,12 +202,8 @@ class AudioPlayerService extends ChangeNotifier {
     _errorSub = null;
     _logSub = null;
     _trackSub = null;
-    _smtcSub = null;
 
     currentMetadata.dispose();
-
-    _smtc?.dispose();
-    _smtc = null;
 
     _player?.dispose();
     _player = null;

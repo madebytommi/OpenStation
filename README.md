@@ -17,7 +17,8 @@ Open Station is designed for a single purpose: providing a clean, private way to
 * **Modern Aesthetic**: Enjoy a spacious, music-first UI featuring a classic Google Play Music-inspired dark theme, complete with calm greens and deep slate blues.
 * **Debounced Searching**: Fluid, responsive search that respects API rate limits without sacrificing user experience.
 * **Offline-Capable Bookmarks**: Your saved stations and metadata are stored locally. You can access and manage your bookmarks even if the radio directory is temporarily unavailable.
-* **Native Windows Integration**: Full support for Windows System Media Transport Controls (SMTC). Control playback using your physical keyboard media keys (Play, Pause, Stop), and view the current station natively inside the Windows volume overlay.
+* **Recently Played**: A local rolling list of up to 10 recently played stations for quick access.
+* **Now Playing Metadata**: Station-provided now-playing information, when available.
 
 ## 🏗️ Tech Stack & Architecture
 
@@ -27,18 +28,13 @@ Open Station is built with a focus on simplicity, reliability, and testability.
 * **Audio Engine**: `media_kit` (powered by `mpv` backend) for robust codec support and stream resilience.
 * **State Management**: `provider` utilizing standard `ChangeNotifier` for clean, decoupled logic.
 * **Persistence**: Atomic local JSON storage (via `path_provider`) ensuring safe, local-first bookmark saves without a heavy database dependency.
-* **OS Hooks**: `smtc_windows` (via `flutter_rust_bridge`) to seamlessly integrate with native Windows APIs.
 
 ## 🛠️ Prerequisites & Building
 
-To compile and run Open Station locally, you need the standard Flutter SDK configured for Windows desktop development, plus the Rust toolchain.
+To compile and run Open Station locally, you need the standard Flutter SDK configured for Windows desktop development, plus the C++ workload in Visual Studio.
 
 1. **Flutter SDK**: Ensure Flutter is installed and Windows desktop support is enabled (`flutter config --enable-windows-desktop`).
 2. **Visual Studio**: The "Desktop development with C++" workload is required.
-3. **Rust Toolchain**: Because the native SMTC integration relies on `cargokit` and `flutter_rust_bridge`, you **must** have Rust (`cargo`) installed on your system. You can install it via Winget:
-   ```powershell
-   winget install -e --id Rustlang.Rustup
-   ```
 
 Once the prerequisites are met, clone the repository and run the following commands to build and run the project locally:
 
