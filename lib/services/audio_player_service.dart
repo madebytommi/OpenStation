@@ -11,6 +11,8 @@ class AudioPlayerService extends ChangeNotifier {
   static const Duration stationConnectionTimeout = Duration(seconds: 10);
   static const String stableFailureMessage =
       'This station could not be reached. Try again or choose another station.';
+  static const String postConnectionFailureMessage =
+      'Playback stopped because this station encountered an error. Try again or choose another station.';
 
   static final AudioPlayerService _instance = AudioPlayerService._internal();
   factory AudioPlayerService() => _instance;
@@ -64,19 +66,22 @@ class AudioPlayerService extends ChangeNotifier {
   double get volume => _volume;
 
   Future<void> init() async {
-    if (_player != null && (_playingSub != null || _bufferingSub != null)) {
-      return;
-    }
-
     _player ??= MediaKitPlayerAdapter();
+  }
+
+  void _bindPlayerEvents(int token) {
+    _playingSub?.cancel();
+    _bufferingSub?.cancel();
+    _completedSub?.cancel();
+    _errorSub?.cancel();
+    _trackSub?.cancel();
+    _logSub?.cancel();
 
     _playingSub = _player!.playing.listen((playing) {
+      if (token != _playRequestToken) return;
       if (playing) {
         if (!_player!.isBuffering) {
           _setState(AudioPlayerState.playing);
-          if (_currentStation != null) {
-            _recordRecentStation(_currentStation!);
-          }
         }
       } else if (_state == AudioPlayerState.playing ||
           _state == AudioPlayerState.connecting) {
@@ -85,6 +90,7 @@ class AudioPlayerService extends ChangeNotifier {
     });
 
     _bufferingSub = _player!.buffering.listen((buffering) {
+      if (token != _playRequestToken) return;
       if (buffering) {
         _setState(AudioPlayerState.connecting);
       } else if (_player!.isPlaying) {
@@ -93,6 +99,7 @@ class AudioPlayerService extends ChangeNotifier {
     });
 
     _completedSub = _player!.completed.listen((completed) {
+      if (token != _playRequestToken) return;
       if (completed) {
         currentMetadata.value = null;
         _setState(AudioPlayerState.stopped);
@@ -100,14 +107,18 @@ class AudioPlayerService extends ChangeNotifier {
     });
 
     _errorSub = _player!.error.listen((errorStr) {
+      if (token != _playRequestToken) return;
       if (errorStr.isNotEmpty && _state != AudioPlayerState.connecting) {
+        _playRequestToken++; 
         currentMetadata.value = null;
-        _lastError = stableFailureMessage;
+        _player!.stop();
+        _lastError = postConnectionFailureMessage;
         _setState(AudioPlayerState.failed);
       }
     });
 
     _trackSub = _player!.track.listen((track) {
+      if (token != _playRequestToken) return;
       String? title = track.audio.title;
       if (title != null) {
         title = title.trim();
@@ -117,16 +128,9 @@ class AudioPlayerService extends ChangeNotifier {
     });
 
     _logSub = _player!.log.listen((event) {
+      if (token != _playRequestToken) return;
       final text = event.text.toLowerCase();
-      if (event.level == 'error' ||
-          text.contains('error') ||
-          text.contains('failed')) {
-        if (_state != AudioPlayerState.connecting) {
-          _lastError = stableFailureMessage;
-          currentMetadata.value = null;
-          notifyListeners();
-        }
-      } else if (text.contains('icy-title:')) {
+      if (text.contains('icy-title:')) {
         final parts = event.text.split(
           RegExp(r'icy-title:\s*', caseSensitive: false),
         );
@@ -188,6 +192,8 @@ class AudioPlayerService extends ChangeNotifier {
 
     if (currentToken != _playRequestToken) return;
 
+    _bindPlayerEvents(currentToken);
+
     _setState(AudioPlayerState.connecting);
 
     bool success = false;
@@ -217,7 +223,9 @@ class AudioPlayerService extends ChangeNotifier {
 
     if (currentToken != _playRequestToken) return;
 
-    if (!success) {
+    if (success) {
+      _recordRecentStation(_currentStation!);
+    } else {
       currentMetadata.value = null;
       _lastError = stableFailureMessage;
       _setState(AudioPlayerState.failed);

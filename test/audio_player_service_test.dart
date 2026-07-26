@@ -52,6 +52,10 @@ class FakeAudioPlayerAdapter implements AudioPlayerAdapter {
     _errorController.add(err);
   }
 
+  void emitLog(PlayerLog log) {
+    _logController.add(log);
+  }
+
   @override
   Future<void> open(Media media) async {
     openedUrls.add(media.uri);
@@ -513,5 +517,51 @@ void main() {
         expect(service.state, AudioPlayerState.stopped);
       },
     );
+
+    test('19: Non-fatal logs do not transition state to Failed', () async {
+      final service = createService();
+      const station = Station(
+        uuid: 's-19',
+        name: 'Station 19',
+        url: 'http://orig.stream',
+        resolvedUrl: 'http://orig.stream',
+      );
+
+      adapter.onOpen = (media) async {
+        scheduleMicrotask(() => adapter.emitPlaying(true));
+      };
+
+      await service.playStation(station);
+      expect(service.state, AudioPlayerState.playing);
+
+      adapter.emitLog(const PlayerLog(prefix: 'test', level: 'error', text: 'Some harmless error string'));
+      await Future.delayed(Duration.zero);
+
+      expect(service.state, AudioPlayerState.playing); // Must not fail
+    });
+
+    test('20: Fatal post-connection error correctly fails and stops player', () async {
+      final service = createService();
+      const station = Station(
+        uuid: 's-20',
+        name: 'Station 20',
+        url: 'http://orig.stream',
+        resolvedUrl: 'http://orig.stream',
+      );
+
+      adapter.onOpen = (media) async {
+        scheduleMicrotask(() => adapter.emitPlaying(true));
+      };
+
+      await service.playStation(station);
+      expect(service.state, AudioPlayerState.playing);
+
+      adapter.emitError('Fatal decode error');
+      await Future.delayed(Duration.zero);
+
+      expect(service.state, AudioPlayerState.failed);
+      expect(service.lastError, AudioPlayerService.postConnectionFailureMessage);
+      expect(adapter.isPlaying, false); // Ensures stop was called
+    });
   });
 }
