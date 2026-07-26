@@ -23,6 +23,9 @@ class AudioPlayerService extends ChangeNotifier {
   String _lastError = '';
   double _volume = 1.0;
   int _playRequestToken = 0;
+  int _activePlaybackToken = -1;
+  String? _pendingFatalError;
+  Timer? _errorSettleTimer;
 
   Duration _connectionTimeout = stationConnectionTimeout;
   void Function(Station)? _recentStationCallback;
@@ -77,15 +80,33 @@ class AudioPlayerService extends ChangeNotifier {
     _trackSub?.cancel();
     _logSub?.cancel();
 
+    // Note on request-token binding and shared-player events:
+    // 1. The token prevents callbacks owned by superseded listeners from acting.
+    // 2. The underlying player events are not tagged with a station or request identity.
+    // 3. Post-connection error handling must therefore confirm that the current active 
+    //    playback actually stopped or became unusable before failing the active station.
+
     _playingSub = _player!.playing.listen((playing) {
       if (token != _playRequestToken) return;
+
+      if (_state == AudioPlayerState.connecting) {
+        return; // playing=false should not expose Paused while connecting.
+      }
+
       if (playing) {
         if (!_player!.isBuffering) {
           _setState(AudioPlayerState.playing);
+          if (_pendingFatalError != null) {
+            _pendingFatalError = null;
+            _errorSettleTimer?.cancel();
+          }
         }
-      } else if (_state == AudioPlayerState.playing ||
-          _state == AudioPlayerState.connecting) {
-        _setState(AudioPlayerState.paused);
+      } else {
+        if (_pendingFatalError != null && _activePlaybackToken == token) {
+          _finalizeFatalError(token);
+        } else if (_state == AudioPlayerState.playing) {
+          _setState(AudioPlayerState.paused);
+        }
       }
     });
 
@@ -101,6 +122,9 @@ class AudioPlayerService extends ChangeNotifier {
     _completedSub = _player!.completed.listen((completed) {
       if (token != _playRequestToken) return;
       if (completed) {
+        _activePlaybackToken = -1;
+        _pendingFatalError = null;
+        _errorSettleTimer?.cancel();
         currentMetadata.value = null;
         _setState(AudioPlayerState.stopped);
       }
@@ -108,12 +132,22 @@ class AudioPlayerService extends ChangeNotifier {
 
     _errorSub = _player!.error.listen((errorStr) {
       if (token != _playRequestToken) return;
-      if (errorStr.isNotEmpty && _state != AudioPlayerState.connecting) {
-        _playRequestToken++; 
-        currentMetadata.value = null;
-        _player!.stop();
-        _lastError = postConnectionFailureMessage;
-        _setState(AudioPlayerState.failed);
+      if (errorStr.isNotEmpty && _activePlaybackToken == token) {
+        _pendingFatalError = errorStr;
+        // A short bounded backend-settling window is required because the shared stream
+        // might emit an error shortly before emitting playing=false, or it might be a spurious
+        // error while playback successfully continues. We wait 100ms to observe if the player
+        // actually stopped.
+        _errorSettleTimer?.cancel();
+        _errorSettleTimer = Timer(const Duration(milliseconds: 100), () {
+          if (_pendingFatalError != null && _activePlaybackToken == token) {
+            if (!_player!.isPlaying) {
+              _finalizeFatalError(token);
+            } else {
+              _pendingFatalError = null; // Active playback continues normally
+            }
+          }
+        });
       }
     });
 
@@ -146,6 +180,25 @@ class AudioPlayerService extends ChangeNotifier {
     });
   }
 
+  void _finalizeFatalError(int token) {
+    if (token != _playRequestToken) return;
+    if (_activePlaybackToken != token) return;
+    if (_pendingFatalError == null) return;
+
+    _activePlaybackToken = -1;
+    _pendingFatalError = null;
+    _errorSettleTimer?.cancel();
+
+    currentMetadata.value = null;
+    
+    // Stop the player without allowing the resulting stop event to overwrite Failed.
+    // ignore: unawaited_futures
+    _player!.stop();
+    
+    _lastError = postConnectionFailureMessage;
+    _setState(AudioPlayerState.failed);
+  }
+
   void _recordRecentStation(Station station) {
     if (_recentStationCallback != null) {
       _recentStationCallback!(station);
@@ -160,6 +213,10 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> playStation(Station station) async {
+    _activePlaybackToken = -1;
+    _pendingFatalError = null;
+    _errorSettleTimer?.cancel();
+    
     _currentStation = station;
     final currentToken = ++_playRequestToken;
 
@@ -224,8 +281,12 @@ class AudioPlayerService extends ChangeNotifier {
     if (currentToken != _playRequestToken) return;
 
     if (success) {
+      _activePlaybackToken = currentToken;
       _recordRecentStation(_currentStation!);
     } else {
+      _activePlaybackToken = -1;
+      _pendingFatalError = null;
+      _errorSettleTimer?.cancel();
       currentMetadata.value = null;
       _lastError = stableFailureMessage;
       _setState(AudioPlayerState.failed);
@@ -322,6 +383,10 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    _activePlaybackToken = -1;
+    _pendingFatalError = null;
+    _errorSettleTimer?.cancel();
+    
     _playRequestToken++;
     currentMetadata.value = null;
     if (_player != null) {
@@ -340,6 +405,10 @@ class AudioPlayerService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _activePlaybackToken = -1;
+    _pendingFatalError = null;
+    _errorSettleTimer?.cancel();
+    
     _playingSub?.cancel();
     _bufferingSub?.cancel();
     _completedSub?.cancel();

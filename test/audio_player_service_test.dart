@@ -540,7 +540,7 @@ void main() {
       expect(service.state, AudioPlayerState.playing); // Must not fail
     });
 
-    test('20: Fatal post-connection error correctly fails and stops player', () async {
+    test('20: Active station emits a dedicated error and then playing=false', () async {
       final service = createService();
       const station = Station(
         uuid: 's-20',
@@ -555,13 +555,213 @@ void main() {
 
       await service.playStation(station);
       expect(service.state, AudioPlayerState.playing);
+      service.currentMetadata.value = 'Some metadata';
 
       adapter.emitError('Fatal decode error');
+      await Future.delayed(Duration.zero);
+      expect(service.state, AudioPlayerState.playing); // Pending, wait for confirmation
+
+      adapter.emitPlaying(false);
       await Future.delayed(Duration.zero);
 
       expect(service.state, AudioPlayerState.failed);
       expect(service.lastError, AudioPlayerService.postConnectionFailureMessage);
       expect(adapter.isPlaying, false); // Ensures stop was called
+      expect(service.currentMetadata.value, isNull);
+    });
+
+    test('21: Station A is Playing, B is selected, and an untagged error is emitted while B remains Playing', () async {
+      final service = createService(timeout: const Duration(milliseconds: 100));
+      const stationA = Station(
+        uuid: 's-21a',
+        name: 'Station 21A',
+        url: 'http://orig.a',
+        resolvedUrl: 'http://orig.a',
+      );
+      const stationB = Station(
+        uuid: 's-21b',
+        name: 'Station 21B',
+        url: 'http://orig.b',
+        resolvedUrl: 'http://orig.b',
+      );
+
+      adapter.onOpen = (media) async {
+        if (media.uri == 'http://orig.b') {
+          scheduleMicrotask(() => adapter.emitPlaying(true));
+        }
+      };
+
+      final f1 = service.playStation(stationA);
+      await Future.delayed(const Duration(milliseconds: 20));
+      final f2 = service.playStation(stationB);
+      await Future.wait([f1, f2]);
+
+      expect(service.state, AudioPlayerState.playing);
+      expect(service.currentStation?.uuid, 's-21b');
+      service.currentMetadata.value = 'B metadata';
+
+      adapter.emitError('Late fatal error from A');
+      await Future.delayed(Duration.zero);
+      // Wait for the settle timer to pass and prove B continues playing
+      await Future.delayed(const Duration(milliseconds: 150));
+
+      expect(service.state, AudioPlayerState.playing);
+      expect(service.currentMetadata.value, 'B metadata');
+      expect(service.lastError, isEmpty);
+    });
+
+    test('22: Active station emits a dedicated error but continues Playing', () async {
+      final service = createService();
+      const station = Station(uuid: 's-22', name: '22', url: 'http://u', resolvedUrl: '');
+      
+      adapter.onOpen = (media) async {
+        scheduleMicrotask(() => adapter.emitPlaying(true));
+      };
+      
+      await service.playStation(station);
+      expect(service.state, AudioPlayerState.playing);
+
+      adapter.emitError('Some error but we keep playing');
+      await Future.delayed(Duration.zero);
+      // Wait for settle timer
+      await Future.delayed(const Duration(milliseconds: 150));
+
+      expect(service.state, AudioPlayerState.playing);
+      expect(service.lastError, isEmpty);
+    });
+
+    test('23: Normal completion followed by a delayed error', () async {
+      final service = createService();
+      const station = Station(uuid: 's-23', name: '23', url: 'http://u', resolvedUrl: '');
+      
+      adapter.onOpen = (media) async {
+        scheduleMicrotask(() => adapter.emitPlaying(true));
+      };
+      await service.playStation(station);
+      expect(service.state, AudioPlayerState.playing);
+
+      adapter.emitCompleted(true);
+      await Future.delayed(Duration.zero);
+      expect(service.state, AudioPlayerState.stopped);
+
+      adapter.emitError('Late error');
+      await Future.delayed(const Duration(milliseconds: 150));
+      expect(service.state, AudioPlayerState.stopped);
+      expect(service.lastError, isEmpty);
+    });
+
+    test('24: User Stop followed by a delayed error', () async {
+      final service = createService();
+      const station = Station(uuid: 's-24', name: '24', url: 'http://u', resolvedUrl: '');
+      
+      adapter.onOpen = (media) async {
+        scheduleMicrotask(() => adapter.emitPlaying(true));
+      };
+      await service.playStation(station);
+      expect(service.state, AudioPlayerState.playing);
+
+      await service.stop();
+      expect(service.state, AudioPlayerState.stopped);
+
+      adapter.emitError('Late error');
+      await Future.delayed(const Duration(milliseconds: 150));
+      expect(service.state, AudioPlayerState.stopped);
+      expect(service.lastError, isEmpty);
+    });
+
+    test('25: Duplicate dedicated errors followed by playback stop', () async {
+      final service = createService();
+      const station = Station(uuid: 's-25', name: '25', url: 'http://u', resolvedUrl: '');
+      
+      adapter.onOpen = (media) async {
+        scheduleMicrotask(() => adapter.emitPlaying(true));
+      };
+      await service.playStation(station);
+      
+      adapter.emitError('Error 1');
+      adapter.emitError('Error 2');
+      adapter.emitPlaying(false);
+      await Future.delayed(const Duration(milliseconds: 150));
+
+      expect(service.state, AudioPlayerState.failed);
+      expect(service.lastError, AudioPlayerService.postConnectionFailureMessage);
+    });
+
+    test('26: Valid ICY metadata continues to work', () async {
+      final service = createService();
+      const station = Station(uuid: 's-26', name: '26', url: 'http://u', resolvedUrl: '');
+      adapter.onOpen = (media) async {
+        scheduleMicrotask(() => adapter.emitPlaying(true));
+      };
+      await service.playStation(station);
+      
+      adapter.emitLog(const PlayerLog(prefix: 'test', level: 'info', text: 'icy-title: Cool Song - Artist'));
+      await Future.delayed(Duration.zero);
+      expect(service.currentMetadata.value, 'Cool Song - Artist');
+    });
+
+    test('27: Malformed ICY metadata remains nonfatal', () async {
+      final service = createService();
+      const station = Station(uuid: 's-27', name: '27', url: 'http://u', resolvedUrl: '');
+      adapter.onOpen = (media) async {
+        scheduleMicrotask(() => adapter.emitPlaying(true));
+      };
+      await service.playStation(station);
+      
+      adapter.emitLog(const PlayerLog(prefix: 'test', level: 'info', text: 'icy-title:'));
+      await Future.delayed(Duration.zero);
+      expect(service.state, AudioPlayerState.playing);
+      expect(service.currentMetadata.value, isNull);
+    });
+
+    test('28: Duplicate playing=true events do not duplicate Recently Played', () async {
+      final service = createService();
+      const station = Station(uuid: 's-28', name: '28', url: 'http://u', resolvedUrl: '');
+      adapter.onOpen = (media) async {
+        scheduleMicrotask(() => adapter.emitPlaying(true));
+      };
+      await service.playStation(station);
+      
+      adapter.emitPlaying(true);
+      adapter.emitPlaying(true);
+      await Future.delayed(Duration.zero);
+      
+      expect(recentAdded.length, 1);
+    });
+
+    test('29: Dispose followed by late events causes no state resurrection or exception', () async {
+      final service = createService();
+      const station = Station(uuid: 's-29', name: '29', url: 'http://u', resolvedUrl: '');
+      adapter.onOpen = (media) async {
+        scheduleMicrotask(() => adapter.emitPlaying(true));
+      };
+      await service.playStation(station);
+      
+      service.dispose();
+      
+      adapter.emitError('Late error');
+      adapter.emitPlaying(false);
+      adapter.emitLog(const PlayerLog(prefix: 'test', level: 'info', text: 'icy-title: Song'));
+      await Future.delayed(const Duration(milliseconds: 150));
+      
+      expect(service.state, AudioPlayerState.idle);
+    });
+
+    test('30: playing=false during Connecting should not expose Paused', () async {
+      final service = createService(timeout: const Duration(milliseconds: 50));
+      const station = Station(uuid: 's-30', name: '30', url: 'http://u', resolvedUrl: '');
+      
+      adapter.onOpen = (media) async {
+        scheduleMicrotask(() => adapter.emitPlaying(false));
+      };
+      
+      final future = service.playStation(station);
+      await Future.delayed(const Duration(milliseconds: 10));
+      
+      expect(service.state, AudioPlayerState.connecting);
+      
+      await future; // Will fail after timeout
+      expect(service.state, AudioPlayerState.failed);
     });
   });
 }
