@@ -21,7 +21,30 @@ class StationCard extends StatelessWidget {
         isCurrentStation && playerService.state == AudioPlayerState.playing;
     final isConnecting =
         isCurrentStation && playerService.state == AudioPlayerState.connecting;
+    final isPaused =
+        isCurrentStation && playerService.state == AudioPlayerState.paused;
+    final isFailed =
+        isCurrentStation && playerService.state == AudioPlayerState.failed;
     final isBookmarked = bookmarkService.isBookmarked(station.uuid);
+
+    final String playbackTooltip;
+    final IconData playbackIcon;
+    if (isConnecting) {
+      playbackTooltip = 'Connecting to ${station.name}';
+      playbackIcon = Icons.hourglass_top;
+    } else if (isPlaying) {
+      playbackTooltip = 'Pause ${station.name}';
+      playbackIcon = Icons.pause_circle_filled;
+    } else if (isPaused) {
+      playbackTooltip = 'Resume ${station.name}';
+      playbackIcon = Icons.play_circle_filled;
+    } else if (isFailed) {
+      playbackTooltip = 'Retry ${station.name}';
+      playbackIcon = Icons.refresh;
+    } else {
+      playbackTooltip = 'Play ${station.name}';
+      playbackIcon = Icons.play_circle_filled;
+    }
 
     return Card(
       color: isCurrentStation ? AppColors.raisedSlate : AppColors.slateSurface,
@@ -41,11 +64,8 @@ class StationCard extends StatelessWidget {
           padding: const EdgeInsets.all(12.0),
           child: Row(
             children: [
-              // Artwork
               StationArtwork(faviconUrl: station.faviconUrl, size: 56),
               const SizedBox(width: 12),
-
-              // Title and Subtitle Info
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -106,8 +126,6 @@ class StationCard extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // Action Buttons: Play/Connecting Indicator & Bookmark Toggle
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -121,7 +139,9 @@ class StationCard extends StatelessWidget {
                     onPressed: () {
                       context.read<BookmarkService>().toggleBookmark(station);
                     },
-                    tooltip: isBookmarked ? 'Remove Bookmark' : 'Add Bookmark',
+                    tooltip: isBookmarked
+                        ? 'Remove ${station.name} from bookmarks'
+                        : 'Add ${station.name} to bookmarks',
                   ),
                   IconButton(
                     icon: isConnecting
@@ -134,24 +154,26 @@ class StationCard extends StatelessWidget {
                             ),
                           )
                         : Icon(
-                            isPlaying
-                                ? Icons.pause_circle_filled
-                                : Icons.play_circle_filled,
+                            playbackIcon,
                             color: isCurrentStation
                                 ? AppColors.openGreen
                                 : AppColors.signalBlue,
                             size: 32,
                           ),
-                    onPressed: () {
-                      if (isPlaying) {
-                        context.read<AudioPlayerService>().pause();
-                      } else if (isCurrentStation &&
-                          playerService.state == AudioPlayerState.paused) {
-                        context.read<AudioPlayerService>().resume();
-                      } else {
-                        context.read<AudioPlayerService>().playStation(station);
-                      }
-                    },
+                    onPressed: isConnecting
+                        ? null
+                        : () {
+                            if (isPlaying) {
+                              context.read<AudioPlayerService>().pause();
+                            } else if (isPaused) {
+                              context.read<AudioPlayerService>().resume();
+                            } else {
+                              context
+                                  .read<AudioPlayerService>()
+                                  .playStation(station);
+                            }
+                          },
+                    tooltip: playbackTooltip,
                   ),
                 ],
               ),
