@@ -2,7 +2,7 @@
 
 **A minimal, local-first, privacy-focused Windows desktop internet radio player.**
 
-Open Station provides a clean way to discover public internet radio, listen, save favorite stations, and return to them later. It requires no account and includes no advertising, cloud synchronization, or app-specific analytics.
+Open Station provides a clean way to discover public internet radio, listen, save favorite stations, and return to them later. It requires no account and includes no app-specific advertising, cloud synchronization, or app-specific analytics. Individual radio stations may include their own broadcast advertising.
 
 ## Release status
 
@@ -29,9 +29,10 @@ Do not move only the executable; the adjacent runtime files are required.
 
 ## Privacy and network behavior
 
-- Searches contact the Radio Browser directory.
-- Audio connects directly to the selected station.
-- Stations and network providers may receive your IP address and connection information.
+- Searches contact Radio Browser servers.
+- Audio connects directly to the selected station’s stream host.
+- Station artwork may be downloaded from the favicon URL supplied by Radio Browser.
+- Radio Browser servers, selected stations, station-artwork hosts, and network providers may receive your IP address and other connection information.
 - Listening is not anonymous.
 - Bookmarks, Recently Played, and volume settings remain local to the computer.
 - Open Station does not send Radio Browser click-count notifications.
