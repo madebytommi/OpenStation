@@ -36,9 +36,7 @@ void main() {
 
     test('rejects records with a missing station snapshot', () {
       expect(
-        Bookmark.tryFromJson({
-          'bookmarkedAt': '2026-07-26T23:30:00.000Z',
-        }),
+        Bookmark.tryFromJson({'bookmarkedAt': '2026-07-26T23:30:00.000Z'}),
         isNull,
       );
     });

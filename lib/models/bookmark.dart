@@ -25,10 +25,7 @@ class Bookmark {
       throw const FormatException('Invalid bookmark date');
     }
 
-    return Bookmark(
-      station: station,
-      bookmarkedAt: bookmarkedAt.toUtc(),
-    );
+    return Bookmark(station: station, bookmarkedAt: bookmarkedAt.toUtc());
   }
 
   static Bookmark? tryFromJson(dynamic json) {

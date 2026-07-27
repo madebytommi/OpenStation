@@ -151,9 +151,7 @@ class BookmarkService extends ChangeNotifier {
 
   Future<void> addBookmark(Station station) async {
     if (!_bookmarks.any((bookmark) => bookmark.station.uuid == station.uuid)) {
-      _bookmarks.add(
-        Bookmark(station: station, bookmarkedAt: _nowUtc()),
-      );
+      _bookmarks.add(Bookmark(station: station, bookmarkedAt: _nowUtc()));
       notifyListeners();
       await _saveToDisk();
     }
