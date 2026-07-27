@@ -118,7 +118,12 @@ void main() {
       find.textContaining('Audio connects directly to the selected station'),
       findsOneWidget,
     );
-    expect(find.textContaining('may receive your IP address'), findsOneWidget);
+    expect(
+      find.text(
+        'Radio Browser servers, selected stations, station-artwork hosts, and network providers may receive your IP address and other connection information.',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Listening is not anonymous.'), findsOneWidget);
     expect(
       find.textContaining('does not send Radio Browser click-count'),
@@ -126,6 +131,12 @@ void main() {
     );
     expect(
       find.textContaining('active station stream supplies it'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Open Station does not use third-party metadata enrichment, lyrics, or cloud listening-history services. Station artwork may be downloaded directly from the favicon URL supplied by Radio Browser.',
+      ),
       findsOneWidget,
     );
   });

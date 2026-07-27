@@ -52,7 +52,7 @@ class AboutPage extends StatelessWidget {
                 items: [
                   'Station searches contact the Radio Browser directory.',
                   'Audio connects directly to the selected station rather than passing through an Open Station server.',
-                  'The selected station and network providers may receive your IP address and other connection information.',
+                  'Radio Browser servers, selected stations, station-artwork hosts, and network providers may receive your IP address and other connection information.',
                   'Listening is not anonymous.',
                   'Open Station does not send Radio Browser click-count notifications.',
                 ],
@@ -63,7 +63,7 @@ class AboutPage extends StatelessWidget {
                 title: 'Now-playing information',
                 items: [
                   'Song, show, or other now-playing text is displayed only when the active station stream supplies it.',
-                  'Open Station does not use external metadata enrichment, artwork lookup, lyrics, or listening-history services.',
+                  'Open Station does not use third-party metadata enrichment, lyrics, or cloud listening-history services. Station artwork may be downloaded directly from the favicon URL supplied by Radio Browser.',
                 ],
               ),
               const SizedBox(height: 24),
