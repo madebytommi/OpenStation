@@ -59,7 +59,7 @@ jobs:
             exit 1
           fi
 
-          if git grep -n -E 'smtc_windows|flutter_rust_bridge' -- ':!*.md'; then
+          if git grep -n -E 'smtc_windows|flutter_rust_bridge' -- lib pubspec.yaml pubspec.lock windows; then
             echo "Removed Windows media-control dependencies remain in production files."
             exit 1
           fi
