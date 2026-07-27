@@ -6,7 +6,7 @@
 
 ## Current decision
 
-**READY FOR AUTOMATED VALIDATION AND FINAL WINDOWS MANUAL TESTING**
+**AUTOMATED GATES PASSED — READY FOR FINAL WINDOWS MANUAL TESTING**
 
 The feature scope for v0.1.0 is frozen. No additional product features should be added during this pass. A `v0.1.0` tag and packaged release should be created only after:
 
@@ -58,7 +58,7 @@ The feature scope for v0.1.0 is frozen. No additional product features should be
 
 ## Automated release gates
 
-The branch workflow must pass all of the following:
+The branch workflow passed all of the following:
 
 - `dart format --output=none --set-exit-if-changed lib test`
 - `flutter analyze`
@@ -66,9 +66,9 @@ The branch workflow must pass all of the following:
 - Complete deterministic test suite
 - Scope and repository-hygiene checks
 - Windows release build
-- Candidate ZIP creation
+- Candidate ZIP creation and artifact upload
 
-**Automated result:** Pending branch validation.
+**Automated result:** PASSED on GitHub Actions with Flutter 3.44.6. The uploaded artifact is named `OpenStation-v0.1.0-Windows`, is approximately 20.3 MB, and has SHA-256 digest `6c5d4e4469cf34d8a836db437de56494db44fbeef1b83f1444c822028450dd05`.
 
 ## Scope and repository-hygiene requirements
 
