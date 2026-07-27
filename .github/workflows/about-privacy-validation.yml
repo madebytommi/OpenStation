@@ -38,7 +38,12 @@ jobs:
           fi
       - run: dart format --output=none --set-exit-if-changed lib test
       - run: flutter analyze
-      - run: flutter test test/widget_test.dart
+      - name: Test app shell rendering
+        run: flutter test test/widget_test.dart --plain-name "AppShell renders sidebar, main view, and player bar"
+      - name: Test required disclosures
+        run: flutter test test/widget_test.dart --plain-name "About page is reachable and shows required disclosures"
+      - name: Test short-window scrolling
+        run: flutter test test/widget_test.dart --plain-name "About page scrolls at a short desktop window height"
       - run: flutter test test/bookmark_model_test.dart test/bookmark_service_test.dart test/radio_browser_service_test.dart test/recent_stations_service_test.dart test/station_model_test.dart test/widget_test.dart test/directory_controller_test.dart test/audio_player_service_test.dart
 
   windows-build:
