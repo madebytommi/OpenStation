@@ -27,14 +27,32 @@ void main() {
       resolvedUrl: 'http://url2',
     );
 
+    List<File> corruptStorageFiles() {
+      final files = tmpDirectory
+          .listSync()
+          .whereType<File>()
+          .where((file) {
+            final name = file.uri.pathSegments.last;
+            return name.startsWith('bookmarks.corrupt-') &&
+                name.endsWith('.json');
+          })
+          .toList();
+      files.sort((a, b) => a.path.compareTo(b.path));
+      return files;
+    }
+
+    void resetService() {
+      service.clearMemory();
+      service.customStorageFile = tmpFile;
+      service.customNow = () => fixedNow;
+    }
+
     setUp(() {
       tmpDirectory = Directory.systemTemp.createTempSync('openstation_test');
       tmpFile = File('${tmpDirectory.path}/bookmarks.json');
 
       service = BookmarkService();
-      service.clearMemory();
-      service.customStorageFile = tmpFile;
-      service.customNow = () => fixedNow;
+      resetService();
     });
 
     tearDown(() {
@@ -61,6 +79,7 @@ void main() {
       await service.init();
 
       expect(service.bookmarks, isEmpty);
+      expect(corruptStorageFiles(), isEmpty);
     });
 
     test('adds a dated bookmark and saves the versioned format', () async {
@@ -143,6 +162,7 @@ void main() {
         ]);
         expect(service.bookmarks[0].bookmarkedAt, firstDate);
         expect(service.bookmarks[1].bookmarkedAt, secondDate);
+        expect(corruptStorageFiles(), isEmpty);
       },
     );
 
@@ -178,6 +198,7 @@ void main() {
         legacyFileDate.toIso8601String(),
       );
       expect(migratedBookmarks[0].containsKey('stationuuid'), isFalse);
+      expect(corruptStorageFiles(), isEmpty);
     });
 
     test(
@@ -201,6 +222,7 @@ void main() {
         expect(service.bookmarks[0].station.uuid, 'uuid-1');
         expect(service.bookmarks[0].bookmarkedAt, newDate);
         expect(service.bookmarks[1].station.uuid, 'uuid-2');
+        expect(corruptStorageFiles(), isEmpty);
       },
     );
 
@@ -208,8 +230,7 @@ void main() {
       await service.init();
       await service.addBookmark(testStation1);
 
-      service.clearMemory();
-      service.customStorageFile = tmpFile;
+      resetService();
       await service.init();
 
       expect(service.bookmarks, hasLength(1));
@@ -217,13 +238,129 @@ void main() {
       expect(service.bookmarks.single.bookmarkedAt, fixedNow);
     });
 
-    test('handles corrupted JSON without crashing', () async {
-      tmpFile.writeAsStringSync('{ corrupted json...]');
+    test(
+      'quarantines malformed JSON without crashing and preserves its bytes',
+      () async {
+        const malformedData = '{ corrupted json...]';
+        tmpFile.writeAsStringSync(malformedData);
+
+        await service.init();
+
+        expect(service.bookmarks, isEmpty);
+        expect(service.lastVolume, 1.0);
+        expect(tmpFile.existsSync(), isFalse);
+
+        final recoveryFiles = corruptStorageFiles();
+        expect(recoveryFiles, hasLength(1));
+        expect(
+          recoveryFiles.single.uri.pathSegments.last,
+          'bookmarks.corrupt-20260726T233000000Z.json',
+        );
+        expect(recoveryFiles.single.readAsStringSync(), malformedData);
+      },
+    );
+
+    test(
+      'saves valid data after recovery and reloads it after restart',
+      () async {
+        tmpFile.writeAsStringSync('{ bad json');
+        await service.init();
+
+        await service.addBookmark(testStation1);
+        await service.setVolume(0.42);
+
+        final replacement = jsonDecode(tmpFile.readAsStringSync());
+        expect(
+          replacement['schemaVersion'],
+          BookmarkService.storageSchemaVersion,
+        );
+        expect(replacement['volume'], 0.42);
+        expect(
+          replacement['bookmarks'][0]['station']['stationuuid'],
+          'uuid-1',
+        );
+        expect(corruptStorageFiles(), hasLength(1));
+
+        resetService();
+        await service.init();
+
+        expect(service.bookmarks, hasLength(1));
+        expect(service.bookmarks.single.station, testStation1);
+        expect(service.bookmarks.single.bookmarkedAt, fixedNow);
+        expect(service.lastVolume, 0.42);
+      },
+    );
+
+    test('uses unique recovery names for repeated corruption', () async {
+      tmpFile.writeAsStringSync('{ first bad file');
+      await service.init();
+
+      resetService();
+      tmpFile.writeAsStringSync('{ second bad file');
+      await service.init();
+
+      final recoveryFiles = corruptStorageFiles();
+      expect(recoveryFiles, hasLength(2));
+      expect(
+        recoveryFiles.map((file) => file.uri.pathSegments.last),
+        containsAll([
+          'bookmarks.corrupt-20260726T233000000Z.json',
+          'bookmarks.corrupt-20260726T233000000Z-1.json',
+        ]),
+      );
+      expect(
+        recoveryFiles.map((file) => file.readAsStringSync()),
+        containsAll(['{ first bad file', '{ second bad file']),
+      );
+    });
+
+    test('does not quarantine a healthy bookmark file', () async {
+      final data = {
+        'schemaVersion': BookmarkService.storageSchemaVersion,
+        'volume': 0.6,
+        'bookmarks': [
+          Bookmark(station: testStation1, bookmarkedAt: fixedNow).toJson(),
+        ],
+      };
+      tmpFile.writeAsStringSync(jsonEncode(data));
 
       await service.init();
 
-      expect(service.bookmarks, isEmpty);
+      expect(service.bookmarks, hasLength(1));
+      expect(service.lastVolume, 0.6);
+      expect(tmpFile.existsSync(), isTrue);
+      expect(corruptStorageFiles(), isEmpty);
     });
+
+    test(
+      'skips one invalid record without quarantining the whole file',
+      () async {
+        final data = {
+          'schemaVersion': BookmarkService.storageSchemaVersion,
+          'volume': 0.7,
+          'bookmarks': [
+            Bookmark(station: testStation1, bookmarkedAt: fixedNow).toJson(),
+            {'station': {'name': 'Missing UUID'}, 'bookmarkedAt': 'invalid'},
+            Bookmark(
+              station: testStation2,
+              bookmarkedAt: fixedNow.add(const Duration(minutes: 1)),
+            ).toJson(),
+          ],
+        };
+        tmpFile.writeAsStringSync(jsonEncode(data));
+
+        await service.init();
+
+        expect(service.bookmarks, hasLength(2));
+        expect(service.bookmarks.map((bookmark) => bookmark.station.uuid), [
+          'uuid-1',
+          'uuid-2',
+        ]);
+        expect(service.lastVolume, 0.7);
+        expect(tmpFile.existsSync(), isTrue);
+        expect(corruptStorageFiles(), isEmpty);
+      },
+    );
 
     test(
       'saves and clamps volume without altering bookmark metadata',
