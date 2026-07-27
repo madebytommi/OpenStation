@@ -22,6 +22,23 @@ class PlayerBar extends StatelessWidget {
         currentStation != null &&
         bookmarkService.isBookmarked(currentStation.uuid);
 
+    final stationName = currentStation?.name ?? 'station';
+    final String mainControlTooltip;
+    final IconData mainControlIcon;
+    if (isPlaying) {
+      mainControlTooltip = 'Pause $stationName';
+      mainControlIcon = Icons.pause;
+    } else if (state == AudioPlayerState.paused) {
+      mainControlTooltip = 'Resume $stationName';
+      mainControlIcon = Icons.play_arrow;
+    } else if (isFailed) {
+      mainControlTooltip = 'Retry $stationName';
+      mainControlIcon = Icons.refresh;
+    } else {
+      mainControlTooltip = 'Play $stationName';
+      mainControlIcon = Icons.play_arrow;
+    }
+
     return Container(
       height: 88,
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -31,7 +48,6 @@ class PlayerBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Station Metadata & Artwork Area
           Expanded(
             flex: 3,
             child: currentStation != null
@@ -60,7 +76,7 @@ class PlayerBar extends StatelessWidget {
                             ValueListenableBuilder<String?>(
                               valueListenable: playerService.currentMetadata,
                               builder: (context, metadata, child) {
-                                final bool hasMetadata =
+                                final hasMetadata =
                                     metadata != null && metadata.isNotEmpty;
                                 final String subtitleText;
 
@@ -125,8 +141,8 @@ class PlayerBar extends StatelessWidget {
                           bookmarkService.toggleBookmark(currentStation);
                         },
                         tooltip: isBookmarked
-                            ? 'Remove Bookmark'
-                            : 'Add Bookmark',
+                            ? 'Remove ${currentStation.name} from bookmarks'
+                            : 'Add ${currentStation.name} to bookmarks',
                       ),
                     ],
                   )
@@ -147,27 +163,21 @@ class PlayerBar extends StatelessWidget {
                     ],
                   ),
           ),
-
-          // Central Playback Controls
           Expanded(
             flex: 4,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Stop button
                 IconButton(
                   icon: const Icon(Icons.stop, color: AppColors.secondaryText),
                   onPressed:
                       currentStation != null &&
                           state != AudioPlayerState.stopped
-                      ? () => playerService.stop()
+                      ? playerService.stop
                       : null,
-                  tooltip: 'Stop',
+                  tooltip: 'Stop playback',
                 ),
-
                 const SizedBox(width: 12),
-
-                // Main Play / Pause button
                 Container(
                   width: 48,
                   height: 48,
@@ -176,19 +186,24 @@ class PlayerBar extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: isConnecting
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            color: Colors.white,
+                      ? Semantics(
+                          label: 'Connecting to $stationName',
+                          liveRegion: true,
+                          child: const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              color: Colors.white,
+                            ),
                           ),
                         )
                       : IconButton(
                           icon: Icon(
-                            isPlaying ? Icons.pause : Icons.play_arrow,
+                            mainControlIcon,
                             color: Colors.white,
                             size: 28,
                           ),
+                          tooltip: mainControlTooltip,
                           onPressed: currentStation == null
                               ? null
                               : () {
@@ -202,16 +217,11 @@ class PlayerBar extends StatelessWidget {
                                 },
                         ),
                 ),
-
                 const SizedBox(width: 16),
-
-                // Status Badge
                 _buildStatusBadge(state),
               ],
             ),
           ),
-
-          // Volume Control Area
           Expanded(
             flex: 3,
             child: Row(
@@ -227,6 +237,7 @@ class PlayerBar extends StatelessWidget {
                     color: AppColors.secondaryText,
                     size: 20,
                   ),
+                  tooltip: playerService.volume == 0 ? 'Unmute' : 'Mute',
                   onPressed: () {
                     if (playerService.volume > 0) {
                       playerService.setVolume(0);
@@ -249,9 +260,11 @@ class PlayerBar extends StatelessWidget {
                     ),
                     child: Slider(
                       value: playerService.volume,
-                      onChanged: (val) {
-                        playerService.setVolume(val);
-                        bookmarkService.setVolume(val);
+                      semanticFormatterCallback: (value) =>
+                          'Volume ${(value * 100).round()} percent',
+                      onChanged: (value) {
+                        playerService.setVolume(value);
+                        bookmarkService.setVolume(value);
                       },
                     ),
                   ),

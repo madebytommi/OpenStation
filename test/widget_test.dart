@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:open_station/controllers/directory_controller.dart';
+import 'package:open_station/models/station.dart';
 import 'package:open_station/services/audio_player_service.dart';
 import 'package:open_station/services/bookmark_service.dart';
 import 'package:open_station/services/recent_stations_service.dart';
@@ -9,12 +10,54 @@ import 'package:open_station/theme/app_theme.dart';
 import 'package:open_station/ui/app_shell.dart';
 import 'package:open_station/ui/pages/about_page.dart';
 
+const testStation = Station(
+  uuid: 'station-1',
+  name: 'Test Station',
+  url: 'https://example.com/original',
+  resolvedUrl: 'https://example.com/stream',
+  countryCode: 'US',
+  tags: ['jazz'],
+  codec: 'MP3',
+  bitrate: 128,
+  isWorking: true,
+);
+
 class MockDirectoryController extends DirectoryController {
   @override
   Future<void> loadPopularStations() async {}
 }
 
-Future<void> pumpAppShell(WidgetTester tester) async {
+class SearchResultsDirectoryController extends DirectoryController {
+  @override
+  List<Station> get stations => const [testStation];
+
+  @override
+  String get searchQuery => 'jazz';
+
+  @override
+  Future<void> loadPopularStations() async {}
+}
+
+class PopularResultsDirectoryController extends DirectoryController {
+  @override
+  List<Station> get stations => const [testStation];
+
+  @override
+  Future<void> loadPopularStations() async {}
+}
+
+class FailedSearchDirectoryController extends SearchResultsDirectoryController {
+  @override
+  String? get errorMessage => 'All directory servers failed.';
+
+  @override
+  Future<void> retry() async {}
+}
+
+Future<void> pumpAppShell(
+  WidgetTester tester, {
+  DirectoryController? directoryController,
+}) async {
   await tester.pumpWidget(
     MultiProvider(
       providers: [
@@ -26,7 +69,7 @@ Future<void> pumpAppShell(WidgetTester tester) async {
           value: RecentStationsService(),
         ),
         ChangeNotifierProvider<DirectoryController>.value(
-          value: MockDirectoryController(),
+          value: directoryController ?? MockDirectoryController(),
         ),
       ],
       child: MaterialApp(theme: AppTheme.darkTheme, home: const AppShell()),
@@ -110,5 +153,55 @@ void main() {
 
     expect(versionText, findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Search results use a vertical list with labelled controls', (
+    WidgetTester tester,
+  ) async {
+    await pumpAppShell(
+      tester,
+      directoryController: SearchResultsDirectoryController(),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('search-results-list')), findsOneWidget);
+    expect(find.byKey(const ValueKey('popular-stations-grid')), findsNothing);
+    expect(find.text('Search Results · 1'), findsOneWidget);
+    expect(find.text('Test Station'), findsOneWidget);
+    expect(find.byTooltip('Play Test Station'), findsOneWidget);
+    expect(find.byTooltip('Add Test Station to bookmarks'), findsOneWidget);
+    expect(find.byTooltip('Mute'), findsOneWidget);
+    expect(find.byTooltip('Play station'), findsOneWidget);
+  });
+
+  testWidgets('Popular stations retain the card grid', (
+    WidgetTester tester,
+  ) async {
+    await pumpAppShell(
+      tester,
+      directoryController: PopularResultsDirectoryController(),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('popular-stations-grid')), findsOneWidget);
+    expect(find.byKey(const ValueKey('search-results-list')), findsNothing);
+  });
+
+  testWidgets('Search failure preserves prior results and offers Retry', (
+    WidgetTester tester,
+  ) async {
+    await pumpAppShell(
+      tester,
+      directoryController: FailedSearchDirectoryController(),
+    );
+    await tester.pump();
+
+    expect(
+      find.text('Search failed. Previous results are still shown.'),
+      findsOneWidget,
+    );
+    expect(find.text('Test Station'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.byKey(const ValueKey('search-results-list')), findsOneWidget);
   });
 }
