@@ -43,6 +43,7 @@ class BookmarkService extends ChangeNotifier {
       _storageFile = File(p.join(folder.path, 'bookmarks.json'));
     }
 
+    _loadFailed = false;
     await _loadFromDisk();
   }
 
@@ -64,7 +65,9 @@ class BookmarkService extends ChangeNotifier {
       if (jsonString.trim().isEmpty) return;
 
       final dynamic data = jsonDecode(jsonString);
-      if (data is! Map<String, dynamic>) return;
+      if (data is! Map<String, dynamic>) {
+        throw const FormatException('Bookmark storage root must be an object');
+      }
 
       if (data['volume'] is num) {
         _lastVolume = (data['volume'] as num).toDouble().clamp(0.0, 1.0);
@@ -108,10 +111,76 @@ class BookmarkService extends ChangeNotifier {
       if (migratedLegacyRecords) {
         await _saveToDisk();
       }
-    } catch (e) {
-      _loadFailed = true;
-      debugPrint('Error loading bookmarks: $e');
+    } catch (error) {
+      await _recoverFromCorruptStorage(error);
     }
+  }
+
+  Future<void> _recoverFromCorruptStorage(Object error) async {
+    debugPrint('Error loading bookmarks: $error');
+
+    _bookmarks.clear();
+    _lastVolume = 1.0;
+
+    final storageFile = _storageFile;
+    if (storageFile == null || !await storageFile.exists()) {
+      _loadFailed = false;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final recoveryFile = await _nextCorruptStorageFile(storageFile);
+
+      try {
+        await storageFile.rename(recoveryFile.path);
+      } on FileSystemException {
+        await storageFile.copy(recoveryFile.path);
+        await storageFile.delete();
+      }
+
+      _loadFailed = false;
+      debugPrint('Preserved corrupt bookmark data at ${recoveryFile.path}');
+    } catch (recoveryError) {
+      _loadFailed = true;
+      debugPrint('Failed to preserve corrupt bookmark data: $recoveryError');
+    }
+
+    notifyListeners();
+  }
+
+  Future<File> _nextCorruptStorageFile(File storageFile) async {
+    final directory = storageFile.parent;
+    final baseName = p.basenameWithoutExtension(storageFile.path);
+    final extension = p.extension(storageFile.path);
+    final timestamp = _formatCorruptTimestamp(_nowUtc());
+
+    var collisionIndex = 0;
+    while (true) {
+      final collisionSuffix = collisionIndex == 0 ? '' : '-$collisionIndex';
+      final candidate = File(
+        p.join(
+          directory.path,
+          '$baseName.corrupt-$timestamp$collisionSuffix$extension',
+        ),
+      );
+
+      if (!await candidate.exists()) {
+        return candidate;
+      }
+
+      collisionIndex++;
+    }
+  }
+
+  String _formatCorruptTimestamp(DateTime value) {
+    final utc = value.toUtc();
+
+    String pad(int number, int width) => number.toString().padLeft(width, '0');
+
+    return '${pad(utc.year, 4)}${pad(utc.month, 2)}${pad(utc.day, 2)}'
+        'T${pad(utc.hour, 2)}${pad(utc.minute, 2)}${pad(utc.second, 2)}'
+        '${pad(utc.millisecond, 3)}Z';
   }
 
   Future<void> _saveToDisk() async {
