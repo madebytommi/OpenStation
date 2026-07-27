@@ -20,9 +20,7 @@ Future<void> pumpAppShell(WidgetTester tester) async {
         ChangeNotifierProvider<AudioPlayerService>.value(
           value: AudioPlayerService(),
         ),
-        ChangeNotifierProvider<BookmarkService>.value(
-          value: BookmarkService(),
-        ),
+        ChangeNotifierProvider<BookmarkService>.value(value: BookmarkService()),
         ChangeNotifierProvider<RecentStationsService>.value(
           value: RecentStationsService(),
         ),
@@ -63,10 +61,7 @@ void main() {
       find.textContaining('requires no account and includes no advertising'),
       findsOneWidget,
     );
-    expect(
-      find.textContaining('no app-specific analytics'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('no app-specific analytics'), findsOneWidget);
     expect(
       find.textContaining('Bookmarks, Recently Played, and volume settings'),
       findsOneWidget,
@@ -79,10 +74,7 @@ void main() {
       find.textContaining('Audio connects directly to the selected station'),
       findsOneWidget,
     );
-    expect(
-      find.textContaining('may receive your IP address'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('may receive your IP address'), findsOneWidget);
     expect(find.text('Listening is not anonymous.'), findsOneWidget);
     expect(
       find.textContaining('does not send Radio Browser click-count'),
