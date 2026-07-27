@@ -169,10 +169,7 @@ void main() {
     expect(find.text('Search Results · 1'), findsOneWidget);
     expect(find.text('Test Station'), findsOneWidget);
     expect(find.byTooltip('Play Test Station'), findsOneWidget);
-    expect(
-      find.byTooltip('Add Test Station to bookmarks'),
-      findsOneWidget,
-    );
+    expect(find.byTooltip('Add Test Station to bookmarks'), findsOneWidget);
     expect(find.byTooltip('Mute'), findsOneWidget);
     expect(find.byTooltip('Play station'), findsOneWidget);
   });

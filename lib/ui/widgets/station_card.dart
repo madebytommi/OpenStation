@@ -168,9 +168,9 @@ class StationCard extends StatelessWidget {
                             } else if (isPaused) {
                               context.read<AudioPlayerService>().resume();
                             } else {
-                              context
-                                  .read<AudioPlayerService>()
-                                  .playStation(station);
+                              context.read<AudioPlayerService>().playStation(
+                                station,
+                              );
                             }
                           },
                     tooltip: playbackTooltip,

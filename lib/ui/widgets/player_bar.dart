@@ -81,7 +81,8 @@ class PlayerBar extends StatelessWidget {
                                 final String subtitleText;
 
                                 if (isFailed) {
-                                  subtitleText = playerService.lastError.isNotEmpty
+                                  subtitleText =
+                                      playerService.lastError.isNotEmpty
                                       ? playerService.lastError
                                       : 'Playback failed';
                                 } else if (hasMetadata) {
@@ -208,8 +209,7 @@ class PlayerBar extends StatelessWidget {
                               : () {
                                   if (isPlaying) {
                                     playerService.pause();
-                                  } else if (
-                                      state == AudioPlayerState.paused) {
+                                  } else if (state == AudioPlayerState.paused) {
                                     playerService.resume();
                                   } else {
                                     playerService.playStation(currentStation);
