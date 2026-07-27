@@ -7,6 +7,7 @@ import 'package:open_station/services/bookmark_service.dart';
 import 'package:open_station/services/recent_stations_service.dart';
 import 'package:open_station/theme/app_theme.dart';
 import 'package:open_station/ui/app_shell.dart';
+import 'package:open_station/ui/pages/about_page.dart';
 
 class MockDirectoryController extends DirectoryController {
   @override
@@ -89,12 +90,17 @@ void main() {
   testWidgets('About page scrolls at a short desktop window height', (
     WidgetTester tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(900, 420));
+    await tester.binding.setSurfaceSize(const Size(700, 320));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await pumpAppShell(tester);
-    await tester.tap(find.text('About & Privacy'));
-    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: const Scaffold(body: AboutPage()),
+      ),
+    );
+
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
 
     final versionText = find.text('Open Station v0.1.0 MVP');
     expect(versionText, findsOneWidget);
