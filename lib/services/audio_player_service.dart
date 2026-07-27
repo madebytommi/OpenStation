@@ -9,6 +9,7 @@ enum AudioPlayerState { idle, connecting, playing, paused, stopped, failed }
 
 class AudioPlayerService extends ChangeNotifier {
   static const Duration stationConnectionTimeout = Duration(seconds: 10);
+  static const Duration errorSettleDuration = Duration(milliseconds: 100);
   static const String stableFailureMessage =
       'This station could not be reached. Try again or choose another station.';
   static const String postConnectionFailureMessage =
@@ -26,25 +27,29 @@ class AudioPlayerService extends ChangeNotifier {
   int _activePlaybackToken = -1;
   String? _pendingFatalError;
   Timer? _errorSettleTimer;
+  bool _disposed = false;
 
   Duration _connectionTimeout = stationConnectionTimeout;
+  Duration _errorSettleDuration = errorSettleDuration;
   void Function(Station)? _recentStationCallback;
 
-  StreamSubscription? _playingSub;
-  StreamSubscription? _bufferingSub;
-  StreamSubscription? _completedSub;
-  StreamSubscription? _errorSub;
-  StreamSubscription? _logSub;
-  StreamSubscription? _trackSub;
+  StreamSubscription<bool>? _playingSub;
+  StreamSubscription<bool>? _bufferingSub;
+  StreamSubscription<bool>? _completedSub;
+  StreamSubscription<String>? _errorSub;
+  StreamSubscription<PlayerLog>? _logSub;
+  StreamSubscription<Track>? _trackSub;
 
   final ValueNotifier<String?> currentMetadata = ValueNotifier<String?>(null);
 
   AudioPlayerService._internal({
     AudioPlayerAdapter? adapter,
     Duration connectionTimeout = stationConnectionTimeout,
+    Duration errorSettle = errorSettleDuration,
     void Function(Station)? recentStationCallback,
   }) : _player = adapter {
     _connectionTimeout = connectionTimeout;
+    _errorSettleDuration = errorSettle;
     _recentStationCallback = recentStationCallback;
   }
 
@@ -52,11 +57,13 @@ class AudioPlayerService extends ChangeNotifier {
   static AudioPlayerService createForTesting({
     required AudioPlayerAdapter adapter,
     Duration connectionTimeout = stationConnectionTimeout,
+    Duration errorSettleDuration = AudioPlayerService.errorSettleDuration,
     void Function(Station)? recentStationCallback,
   }) {
     final service = AudioPlayerService._internal(
       adapter: adapter,
       connectionTimeout: connectionTimeout,
+      errorSettle: errorSettleDuration,
       recentStationCallback: recentStationCallback,
     );
     service.init();
@@ -80,38 +87,35 @@ class AudioPlayerService extends ChangeNotifier {
     _trackSub?.cancel();
     _logSub?.cancel();
 
-    // Note on request-token binding and shared-player events:
-    // 1. The token prevents callbacks owned by superseded listeners from acting.
-    // 2. The underlying player events are not tagged with a station or request identity.
-    // 3. Post-connection error handling must therefore confirm that the current active 
-    //    playback actually stopped or became unusable before failing the active station.
-
+    // The token prevents callbacks owned by superseded listeners from acting.
+    // media_kit events are not tagged with a station or request identity, so a
+    // post-connection error is finalized only after active playback also stops.
     _playingSub = _player!.playing.listen((playing) {
-      if (token != _playRequestToken) return;
-
-      if (_state == AudioPlayerState.connecting) {
-        return; // playing=false should not expose Paused while connecting.
-      }
+      if (_disposed || token != _playRequestToken) return;
 
       if (playing) {
-        if (!_player!.isBuffering) {
+        if (!_player!.isBuffering && _state != AudioPlayerState.playing) {
           _setState(AudioPlayerState.playing);
-          if (_pendingFatalError != null) {
-            _pendingFatalError = null;
-            _errorSettleTimer?.cancel();
-          }
         }
-      } else {
-        if (_pendingFatalError != null && _activePlaybackToken == token) {
-          _finalizeFatalError(token);
-        } else if (_state == AudioPlayerState.playing) {
-          _setState(AudioPlayerState.paused);
+        if (_pendingFatalError != null) {
+          _clearPendingFatalError();
         }
+        return;
+      }
+
+      if (_state == AudioPlayerState.connecting) {
+        return;
+      }
+
+      if (_pendingFatalError != null && _activePlaybackToken == token) {
+        _finalizeFatalError(token);
+      } else if (_state == AudioPlayerState.playing) {
+        _setState(AudioPlayerState.paused);
       }
     });
 
     _bufferingSub = _player!.buffering.listen((buffering) {
-      if (token != _playRequestToken) return;
+      if (_disposed || token != _playRequestToken) return;
       if (buffering) {
         _setState(AudioPlayerState.connecting);
       } else if (_player!.isPlaying) {
@@ -120,83 +124,74 @@ class AudioPlayerService extends ChangeNotifier {
     });
 
     _completedSub = _player!.completed.listen((completed) {
-      if (token != _playRequestToken) return;
+      if (_disposed || token != _playRequestToken) return;
       if (completed) {
         _activePlaybackToken = -1;
-        _pendingFatalError = null;
-        _errorSettleTimer?.cancel();
+        _clearPendingFatalError();
         currentMetadata.value = null;
         _setState(AudioPlayerState.stopped);
       }
     });
 
     _errorSub = _player!.error.listen((errorStr) {
-      if (token != _playRequestToken) return;
-      if (errorStr.isNotEmpty && _activePlaybackToken == token) {
-        _pendingFatalError = errorStr;
-        // A short bounded backend-settling window is required because the shared stream
-        // might emit an error shortly before emitting playing=false, or it might be a spurious
-        // error while playback successfully continues. We wait 100ms to observe if the player
-        // actually stopped.
-        _errorSettleTimer?.cancel();
-        _errorSettleTimer = Timer(const Duration(milliseconds: 100), () {
-          if (_pendingFatalError != null && _activePlaybackToken == token) {
-            if (!_player!.isPlaying) {
-              _finalizeFatalError(token);
-            } else {
-              _pendingFatalError = null; // Active playback continues normally
-            }
-          }
-        });
-      }
+      if (_disposed || token != _playRequestToken) return;
+      if (errorStr.isEmpty || _activePlaybackToken != token) return;
+
+      _pendingFatalError = errorStr;
+      _errorSettleTimer?.cancel();
+      _errorSettleTimer = Timer(_errorSettleDuration, () {
+        if (_disposed || token != _playRequestToken) return;
+        if (_pendingFatalError == null || _activePlaybackToken != token) return;
+
+        if (_player!.isPlaying) {
+          _clearPendingFatalError();
+        } else {
+          _finalizeFatalError(token);
+        }
+      });
     });
 
     _trackSub = _player!.track.listen((track) {
-      if (token != _playRequestToken) return;
-      String? title = track.audio.title;
-      if (title != null) {
-        title = title.trim();
-        if (title.isEmpty) title = null;
-      }
+      if (_disposed || token != _playRequestToken) return;
+      String? title = track.audio.title?.trim();
+      if (title != null && title.isEmpty) title = null;
       currentMetadata.value = title;
     });
 
     _logSub = _player!.log.listen((event) {
-      if (token != _playRequestToken) return;
+      if (_disposed || token != _playRequestToken) return;
       final text = event.text.toLowerCase();
-      if (text.contains('icy-title:')) {
-        final parts = event.text.split(
-          RegExp(r'icy-title:\s*', caseSensitive: false),
-        );
-        if (parts.length > 1) {
-          String title = parts[1].trim();
-          if (title.isEmpty) {
-            currentMetadata.value = null;
-          } else {
-            currentMetadata.value = title;
-          }
-        }
-      }
+      if (!text.contains('icy-title:')) return;
+
+      final parts = event.text.split(
+        RegExp(r'icy-title:\s*', caseSensitive: false),
+      );
+      if (parts.length <= 1) return;
+
+      final title = parts[1].trim();
+      currentMetadata.value = title.isEmpty ? null : title;
     });
   }
 
-  void _finalizeFatalError(int token) {
-    if (token != _playRequestToken) return;
-    if (_activePlaybackToken != token) return;
-    if (_pendingFatalError == null) return;
-
-    _activePlaybackToken = -1;
+  void _clearPendingFatalError() {
     _pendingFatalError = null;
     _errorSettleTimer?.cancel();
+    _errorSettleTimer = null;
+  }
 
+  void _finalizeFatalError(int token) {
+    if (_disposed || token != _playRequestToken) return;
+    if (_activePlaybackToken != token || _pendingFatalError == null) return;
+
+    _activePlaybackToken = -1;
+    _clearPendingFatalError();
     currentMetadata.value = null;
-    
-    // Stop the player without allowing the resulting stop event to overwrite Failed.
-    // ignore: unawaited_futures
-    _player!.stop();
-    
     _lastError = postConnectionFailureMessage;
     _setState(AudioPlayerState.failed);
+
+    // The stop future is intentionally detached; request ownership has already
+    // been cleared and Failed is established before playing=false can arrive.
+    unawaited(_player!.stop());
   }
 
   void _recordRecentStation(Station station) {
@@ -207,29 +202,24 @@ class AudioPlayerService extends ChangeNotifier {
     }
   }
 
-  void _setState(AudioPlayerState s) {
-    _state = s;
+  void _setState(AudioPlayerState state) {
+    if (_disposed || _state == state) return;
+    _state = state;
     notifyListeners();
   }
 
   Future<void> playStation(Station station) async {
     _activePlaybackToken = -1;
-    _pendingFatalError = null;
-    _errorSettleTimer?.cancel();
-    
+    _clearPendingFatalError();
+
     _currentStation = station;
     final currentToken = ++_playRequestToken;
 
     final resolved = station.resolvedUrl.trim();
     final original = station.url.trim();
-
-    final List<String> candidates = [];
-    if (resolved.isNotEmpty) {
-      candidates.add(resolved);
-    }
-    if (original.isNotEmpty && original != resolved) {
-      candidates.add(original);
-    }
+    final candidates = <String>[];
+    if (resolved.isNotEmpty) candidates.add(resolved);
+    if (original.isNotEmpty && original != resolved) candidates.add(original);
 
     if (candidates.isEmpty) {
       _lastError = stableFailureMessage;
@@ -247,46 +237,42 @@ class AudioPlayerService extends ChangeNotifier {
       await _player!.stop();
     }
 
-    if (currentToken != _playRequestToken) return;
+    if (_disposed || currentToken != _playRequestToken) return;
 
     _bindPlayerEvents(currentToken);
-
     _setState(AudioPlayerState.connecting);
 
-    bool success = false;
-
-    for (int i = 0; i < candidates.length; i++) {
-      if (currentToken != _playRequestToken) return;
+    var success = false;
+    for (var index = 0; index < candidates.length; index++) {
+      if (_disposed || currentToken != _playRequestToken) return;
 
       currentMetadata.value = null;
-      final candidateUrl = candidates[i];
-
       final attemptSuccess = await _attemptCandidate(
-        candidateUrl,
+        candidates[index],
         currentToken,
       );
-      if (currentToken != _playRequestToken) return;
+      if (_disposed || currentToken != _playRequestToken) return;
 
       if (attemptSuccess) {
         success = true;
         break;
-      } else {
-        if (i < candidates.length - 1) {
-          await _player!.stop();
-          currentMetadata.value = null;
-        }
+      }
+
+      if (index < candidates.length - 1) {
+        await _player!.stop();
+        currentMetadata.value = null;
       }
     }
 
-    if (currentToken != _playRequestToken) return;
+    if (_disposed || currentToken != _playRequestToken) return;
 
     if (success) {
       _activePlaybackToken = currentToken;
+      _setState(AudioPlayerState.playing);
       _recordRecentStation(_currentStation!);
     } else {
       _activePlaybackToken = -1;
-      _pendingFatalError = null;
-      _errorSettleTimer?.cancel();
+      _clearPendingFatalError();
       currentMetadata.value = null;
       _lastError = stableFailureMessage;
       _setState(AudioPlayerState.failed);
@@ -294,62 +280,56 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<bool> _attemptCandidate(String url, int token) async {
-    if (token != _playRequestToken) return false;
+    if (_disposed || token != _playRequestToken) return false;
 
-    final Completer<bool> completer = Completer<bool>();
+    final completer = Completer<bool>();
     Timer? timer;
-    StreamSubscription? playSub;
-    StreamSubscription? errSub;
+    StreamSubscription<bool>? playSub;
+    StreamSubscription<String>? errorSub;
 
     void cleanup() {
       timer?.cancel();
       playSub?.cancel();
-      errSub?.cancel();
+      errorSub?.cancel();
     }
 
-    void finish(bool val) {
-      if (!completer.isCompleted) {
-        cleanup();
-        completer.complete(val);
-      }
+    void finish(bool value) {
+      if (completer.isCompleted) return;
+      cleanup();
+      completer.complete(value);
     }
 
     playSub = _player!.playing.listen((playing) {
-      if (token != _playRequestToken) {
+      if (_disposed || token != _playRequestToken) {
         finish(false);
       } else if (playing) {
         finish(true);
       }
     });
 
-    errSub = _player!.error.listen((err) {
-      if (token != _playRequestToken) {
+    errorSub = _player!.error.listen((error) {
+      if (_disposed || token != _playRequestToken) {
         finish(false);
-      } else if (err.isNotEmpty) {
+      } else if (error.isNotEmpty) {
         finish(false);
       }
     });
 
-    timer = Timer(_connectionTimeout, () {
-      finish(false);
-    });
+    timer = Timer(_connectionTimeout, () => finish(false));
 
     try {
       await _player!.open(
         Media(url, httpHeaders: const {'User-Agent': 'OpenStation/0.1'}),
       );
 
-      if (token != _playRequestToken) {
+      if (_disposed || token != _playRequestToken) {
         finish(false);
         return false;
       }
 
       await _player!.setVolume(_volume * 100);
-
-      if (_player!.isPlaying) {
-        finish(true);
-      }
-    } catch (e) {
+      if (_player!.isPlaying) finish(true);
+    } catch (_) {
       finish(false);
     }
 
@@ -359,56 +339,54 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> playUrl(String url) async {
-    final station = Station(
-      uuid: 'direct-url',
-      name: 'Direct URL',
-      url: url,
-      resolvedUrl: url,
+    await playStation(
+      Station(
+        uuid: 'direct-url',
+        name: 'Direct URL',
+        url: url,
+        resolvedUrl: url,
+      ),
     );
-    await playStation(station);
   }
 
   Future<void> pause() async {
-    if (_player != null) {
-      await _player!.pause();
-      _setState(AudioPlayerState.paused);
-    }
+    if (_player == null) return;
+    await _player!.pause();
+    _setState(AudioPlayerState.paused);
   }
 
   Future<void> resume() async {
-    if (_player != null) {
-      await _player!.play();
-      _setState(AudioPlayerState.playing);
-    }
+    if (_player == null) return;
+    await _player!.play();
+    _setState(AudioPlayerState.playing);
   }
 
   Future<void> stop() async {
     _activePlaybackToken = -1;
-    _pendingFatalError = null;
-    _errorSettleTimer?.cancel();
-    
+    _clearPendingFatalError();
     _playRequestToken++;
     currentMetadata.value = null;
+
     if (_player != null) {
       await _player!.stop();
       _setState(AudioPlayerState.stopped);
     }
   }
 
-  Future<void> setVolume(double vol) async {
-    _volume = vol;
+  Future<void> setVolume(double volume) async {
+    _volume = volume;
     if (_player != null) {
-      await _player!.setVolume(vol * 100);
+      await _player!.setVolume(volume * 100);
       notifyListeners();
     }
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _activePlaybackToken = -1;
-    _pendingFatalError = null;
-    _errorSettleTimer?.cancel();
-    
+    _clearPendingFatalError();
+
     _playingSub?.cancel();
     _bufferingSub?.cancel();
     _completedSub?.cancel();
@@ -424,8 +402,7 @@ class AudioPlayerService extends ChangeNotifier {
     _trackSub = null;
 
     currentMetadata.dispose();
-
-    _player?.dispose();
+    unawaited(_player?.dispose() ?? Future<void>.value());
     _player = null;
     _state = AudioPlayerState.idle;
     super.dispose();
