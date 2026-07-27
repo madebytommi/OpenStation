@@ -2,26 +2,34 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:open_station/models/bookmark.dart';
 import 'package:open_station/models/station.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
 class BookmarkService extends ChangeNotifier {
+  static const int storageSchemaVersion = 2;
+
   static final BookmarkService _instance = BookmarkService._internal();
   factory BookmarkService() => _instance;
   BookmarkService._internal();
 
   File? _storageFile;
-  final List<Station> _bookmarks = [];
+  final List<Bookmark> _bookmarks = [];
   double _lastVolume = 1.0;
   Completer<void>? _saveLock;
   bool _loadFailed = false;
 
-  List<Station> get bookmarks => List.unmodifiable(_bookmarks);
+  List<Bookmark> get bookmarks => List.unmodifiable(_bookmarks);
   double get lastVolume => _lastVolume;
 
   @visibleForTesting
   File? customStorageFile;
+
+  @visibleForTesting
+  DateTime Function()? customNow;
+
+  DateTime _nowUtc() => (customNow?.call() ?? DateTime.now()).toUtc();
 
   Future<void> init() async {
     if (customStorageFile != null) {
@@ -36,6 +44,14 @@ class BookmarkService extends ChangeNotifier {
     }
 
     await _loadFromDisk();
+  }
+
+  Future<DateTime> _legacyBookmarkDate() async {
+    try {
+      return (await _storageFile!.lastModified()).toUtc();
+    } catch (_) {
+      return _nowUtc();
+    }
   }
 
   Future<void> _loadFromDisk() async {
@@ -54,19 +70,43 @@ class BookmarkService extends ChangeNotifier {
         _lastVolume = (data['volume'] as num).toDouble().clamp(0.0, 1.0);
       }
 
+      var migratedLegacyRecords = false;
+      DateTime? legacyBookmarkDate;
+
       if (data['bookmarks'] is List) {
         final List<dynamic> rawList = data['bookmarks'];
         _bookmarks.clear();
+
         for (final item in rawList) {
-          final station = Station.tryFromJson(item);
-          if (station != null) {
-            if (!_bookmarks.any((b) => b.uuid == station.uuid)) {
-              _bookmarks.add(station);
+          var bookmark = Bookmark.tryFromJson(item);
+
+          if (bookmark == null) {
+            final legacyStation = Station.tryFromJson(item);
+            if (legacyStation != null) {
+              legacyBookmarkDate ??= await _legacyBookmarkDate();
+              bookmark = Bookmark(
+                station: legacyStation,
+                bookmarkedAt: legacyBookmarkDate,
+              );
+              migratedLegacyRecords = true;
             }
+          }
+
+          if (bookmark != null &&
+              !_bookmarks.any(
+                (existing) =>
+                    existing.station.uuid == bookmark!.station.uuid,
+              )) {
+            _bookmarks.add(bookmark);
           }
         }
       }
+
       notifyListeners();
+
+      if (migratedLegacyRecords) {
+        await _saveToDisk();
+      }
     } catch (e) {
       _loadFailed = true;
       debugPrint('Error loading bookmarks: $e');
@@ -84,10 +124,10 @@ class BookmarkService extends ChangeNotifier {
 
     try {
       final data = {
+        'schemaVersion': storageSchemaVersion,
         'volume': _lastVolume,
-        'bookmarks': _bookmarks.map((s) => s.toJson()).toList(),
+        'bookmarks': _bookmarks.map((bookmark) => bookmark.toJson()).toList(),
       };
-
       final jsonString = jsonEncode(data);
       final tmpFile = File('${_storageFile!.path}.tmp');
 
@@ -109,8 +149,10 @@ class BookmarkService extends ChangeNotifier {
   }
 
   Future<void> addBookmark(Station station) async {
-    if (!_bookmarks.any((b) => b.uuid == station.uuid)) {
-      _bookmarks.add(station);
+    if (!_bookmarks.any((bookmark) => bookmark.station.uuid == station.uuid)) {
+      _bookmarks.add(
+        Bookmark(station: station, bookmarkedAt: _nowUtc()),
+      );
       notifyListeners();
       await _saveToDisk();
     }
@@ -118,7 +160,7 @@ class BookmarkService extends ChangeNotifier {
 
   Future<void> removeBookmark(String uuid) async {
     final initialLength = _bookmarks.length;
-    _bookmarks.removeWhere((b) => b.uuid == uuid);
+    _bookmarks.removeWhere((bookmark) => bookmark.station.uuid == uuid);
     if (_bookmarks.length != initialLength) {
       notifyListeners();
       await _saveToDisk();
@@ -134,7 +176,7 @@ class BookmarkService extends ChangeNotifier {
   }
 
   bool isBookmarked(String uuid) {
-    return _bookmarks.any((b) => b.uuid == uuid);
+    return _bookmarks.any((bookmark) => bookmark.station.uuid == uuid);
   }
 
   Future<void> setVolume(double volume) async {
@@ -151,6 +193,7 @@ class BookmarkService extends ChangeNotifier {
     _bookmarks.clear();
     _lastVolume = 1.0;
     _loadFailed = false;
+    customNow = null;
     notifyListeners();
   }
 }
