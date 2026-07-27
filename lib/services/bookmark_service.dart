@@ -140,14 +140,10 @@ class BookmarkService extends ChangeNotifier {
       }
 
       _loadFailed = false;
-      debugPrint(
-        'Preserved corrupt bookmark data at ${recoveryFile.path}',
-      );
+      debugPrint('Preserved corrupt bookmark data at ${recoveryFile.path}');
     } catch (recoveryError) {
       _loadFailed = true;
-      debugPrint(
-        'Failed to preserve corrupt bookmark data: $recoveryError',
-      );
+      debugPrint('Failed to preserve corrupt bookmark data: $recoveryError');
     }
 
     notifyListeners();

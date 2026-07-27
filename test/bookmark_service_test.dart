@@ -28,15 +28,10 @@ void main() {
     );
 
     List<File> corruptStorageFiles() {
-      final files = tmpDirectory
-          .listSync()
-          .whereType<File>()
-          .where((file) {
-            final name = file.uri.pathSegments.last;
-            return name.startsWith('bookmarks.corrupt-') &&
-                name.endsWith('.json');
-          })
-          .toList();
+      final files = tmpDirectory.listSync().whereType<File>().where((file) {
+        final name = file.uri.pathSegments.last;
+        return name.startsWith('bookmarks.corrupt-') && name.endsWith('.json');
+      }).toList();
       files.sort((a, b) => a.path.compareTo(b.path));
       return files;
     }
@@ -275,10 +270,7 @@ void main() {
           BookmarkService.storageSchemaVersion,
         );
         expect(replacement['volume'], 0.42);
-        expect(
-          replacement['bookmarks'][0]['station']['stationuuid'],
-          'uuid-1',
-        );
+        expect(replacement['bookmarks'][0]['station']['stationuuid'], 'uuid-1');
         expect(corruptStorageFiles(), hasLength(1));
 
         resetService();
@@ -340,7 +332,10 @@ void main() {
           'volume': 0.7,
           'bookmarks': [
             Bookmark(station: testStation1, bookmarkedAt: fixedNow).toJson(),
-            {'station': {'name': 'Missing UUID'}, 'bookmarkedAt': 'invalid'},
+            {
+              'station': {'name': 'Missing UUID'},
+              'bookmarkedAt': 'invalid',
+            },
             Bookmark(
               station: testStation2,
               bookmarkedAt: fixedNow.add(const Duration(minutes: 1)),
