@@ -2,53 +2,85 @@
 
 **A minimal, local-first, privacy-focused Windows desktop internet radio player.**
 
-Open Station is designed for a single purpose: providing a clean, private way to discover internet radio and build a personal collection of favorite stations. No ads, no accounts, no distractions.
+Open Station provides a clean way to discover public internet radio, listen, save favorite stations, and return to them later. It requires no account and includes no advertising, cloud synchronization, or app-specific analytics.
 
-## 📥 Installation
+## Release status
 
-1. Navigate to the **Releases** tab on the right side of this repository page.
-2. Download the `OpenStation-v0.1.0-Windows.zip` file from the latest release.
-3. Extract the downloaded folder to your desired location on your PC.
-4. Double-click `open_station.exe` to launch the application (you can right-click this file and select *Send to > Desktop (create shortcut)* for easy access).
+The source is currently aligned to **v0.1.0+1**. A packaged v0.1.0 release should be published only after the final Windows manual-validation checklist is complete.
 
-## 🚀 Key Features
+When a packaged release is available:
 
-* **Focused Core Loop**: Effortlessly navigate through the app's primary workflow: *Discover → Search → Play → Bookmark*.
-* **Modern Aesthetic**: Enjoy a spacious, music-first UI featuring a classic Google Play Music-inspired dark theme, complete with calm greens and deep slate blues.
-* **Debounced Searching**: Fluid, responsive search that respects API rate limits without sacrificing user experience.
-* **Offline-Capable Bookmarks**: Your saved stations and metadata are stored locally. You can access and manage your bookmarks even if the radio directory is temporarily unavailable.
-* **Recently Played**: A local rolling list of up to 10 recently played stations for quick access.
-* **Now Playing Metadata**: Station-provided now-playing information, when available.
+1. Open the repository's **Releases** page.
+2. Download `OpenStation-v0.1.0-Windows.zip`.
+3. Extract the complete archive to a folder on your PC.
+4. Launch `open_station.exe` from the extracted folder.
 
-## 🏗️ Tech Stack & Architecture
+Do not move only the executable; the adjacent runtime files are required.
 
-Open Station is built with a focus on simplicity, reliability, and testability.
+## Key features
 
-* **Framework**: Flutter Desktop (Windows target)
-* **Audio Engine**: `media_kit` (powered by `mpv` backend) for robust codec support and stream resilience.
-* **State Management**: `provider` utilizing standard `ChangeNotifier` for clean, decoupled logic.
-* **Persistence**: Atomic local JSON storage (via `path_provider`) ensuring safe, local-first bookmark saves without a heavy database dependency.
+- **Focused core loop:** Discover → Search → Play → Bookmark → Reopen → Play Again
+- **Name and genre search:** Searches station names and Radio Browser tags
+- **Local bookmarks:** Saved station snapshots remain available when the directory is offline
+- **Recently Played:** Maintains a local rolling list of up to 10 stations
+- **Station-provided metadata:** Displays now-playing text supplied by the active stream when available
+- **Playback resilience:** Uses connection timeouts, resolved-to-original URL fallback, and latest-selection-wins switching
+- **Privacy disclosures:** Explains directory requests, direct station connections, and local data storage inside the app
 
-## 🛠️ Prerequisites & Building
+## Privacy and network behavior
 
-To compile and run Open Station locally, you need the standard Flutter SDK configured for Windows desktop development, plus the C++ workload in Visual Studio.
+- Searches contact the Radio Browser directory.
+- Audio connects directly to the selected station.
+- Stations and network providers may receive your IP address and connection information.
+- Listening is not anonymous.
+- Bookmarks, Recently Played, and volume settings remain local to the computer.
+- Open Station does not send Radio Browser click-count notifications.
 
-1. **Flutter SDK**: Ensure Flutter is installed and Windows desktop support is enabled (`flutter config --enable-windows-desktop`).
-2. **Visual Studio**: The "Desktop development with C++" workload is required.
+## Tech stack
 
-Once the prerequisites are met, clone the repository and run the following commands to build and run the project locally:
+- **Framework:** Flutter Desktop, targeting Windows
+- **Language:** Dart
+- **Directory:** Radio Browser
+- **Audio engine:** `media_kit` with the bundled Windows audio libraries
+- **State management:** `provider` and `ChangeNotifier`
+- **Persistence:** Atomic local JSON storage using `dart:io` and `path_provider`
 
-```bash
+## Building from source
+
+You need the Flutter SDK configured for Windows desktop development and Visual Studio with the **Desktop development with C++** workload.
+
+```powershell
 flutter pub get
 flutter run -d windows
 ```
 
-### Building for Release
+Build a release candidate with:
 
-```bash
+```powershell
 flutter build windows
 ```
 
-## 🧪 Testing & QA
+The Windows output is produced under:
 
-Open Station maintains a high standard of reliability. The project features clean static analysis (`flutter analyze`) and a comprehensive suite of 25+ passing unit tests covering core logic, DNS failover, state management, and file-save edge-case handling (`flutter test`).
+```text
+build/windows/x64/runner/Release/
+```
+
+## Testing
+
+Run the deterministic automated suite with:
+
+```powershell
+flutter test test/bookmark_model_test.dart `
+  test/bookmark_service_test.dart `
+  test/radio_browser_service_test.dart `
+  test/recent_stations_service_test.dart `
+  test/station_model_test.dart `
+  test/widget_test.dart `
+  test/directory_controller_test.dart `
+  test/audio_player_service_test.dart
+```
+
+`test/live_dns_test.dart` performs a real network lookup and is intentionally excluded from the deterministic release gate.
+
+Before publishing v0.1.0, also complete the manual Windows checks documented in `RELEASE_READINESS.md`.
