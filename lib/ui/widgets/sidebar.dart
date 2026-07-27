@@ -68,55 +68,71 @@ class Sidebar extends StatelessWidget {
               ],
             ),
           ),
-
           const Divider(color: AppColors.softDivider, height: 1),
-          const SizedBox(height: 16),
-
-          // Navigation Links
-          _buildNavItem(
-            context: context,
-            tab: NavigationTab.discover,
-            icon: Icons.explore,
-            label: 'Discover',
-          ),
-          const SizedBox(height: 4),
-          _buildNavItem(
-            context: context,
-            tab: NavigationTab.bookmarks,
-            icon: Icons.favorite,
-            label: 'Bookmarks',
-            badgeCount: bookmarkCount,
-          ),
-          const SizedBox(height: 4),
-          _buildNavItem(
-            context: context,
-            tab: NavigationTab.about,
-            icon: Icons.info_outline,
-            label: 'About & Privacy',
-          ),
-
-          const Spacer(),
-
-          // Privacy & Info footer
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Local-first & Private',
-                  style: TextStyle(
-                    color: AppColors.disabledText,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: IntrinsicHeight(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 16),
+                          _buildNavItem(
+                            context: context,
+                            tab: NavigationTab.discover,
+                            icon: Icons.explore,
+                            label: 'Discover',
+                          ),
+                          const SizedBox(height: 4),
+                          _buildNavItem(
+                            context: context,
+                            tab: NavigationTab.bookmarks,
+                            icon: Icons.favorite,
+                            label: 'Bookmarks',
+                            badgeCount: bookmarkCount,
+                          ),
+                          const SizedBox(height: 4),
+                          _buildNavItem(
+                            context: context,
+                            tab: NavigationTab.about,
+                            icon: Icons.info_outline,
+                            label: 'About & Privacy',
+                          ),
+                          const Spacer(),
+                          // Privacy & Info footer
+                          const Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Local-first & Private',
+                                  style: TextStyle(
+                                    color: AppColors.disabledText,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'v0.1.0 MVP',
+                                  style: TextStyle(
+                                    color: AppColors.disabledText,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'v0.1.0 MVP',
-                  style: TextStyle(color: AppColors.disabledText, fontSize: 10),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ],
