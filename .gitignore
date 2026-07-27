@@ -45,3 +45,11 @@ app.*.map.json
 /android/app/release
 
 # Internal Project Documentation
+/DECISIONS.md
+/DESIGN_SYSTEM.md
+/EDGE_CASES.md
+/MVP.md
+/PROJECT_RULES.md
+/RELEASE_READINESS.md
+/TECHNICAL_SPIKES.md
+/VISION.md
