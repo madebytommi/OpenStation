@@ -285,21 +285,27 @@ class PlayerBar extends StatelessWidget {
       case AudioPlayerState.playing:
         badgeColor = AppColors.openGreen;
         label = 'PLAYING';
+        break;
       case AudioPlayerState.connecting:
         badgeColor = AppColors.connectingBlue;
         label = 'CONNECTING';
+        break;
       case AudioPlayerState.paused:
         badgeColor = AppColors.signalBlue;
         label = 'PAUSED';
+        break;
       case AudioPlayerState.stopped:
         badgeColor = AppColors.disabledText;
         label = 'STOPPED';
+        break;
       case AudioPlayerState.failed:
         badgeColor = AppColors.error;
         label = 'FAILED';
+        break;
       case AudioPlayerState.idle:
         badgeColor = AppColors.disabledText;
         label = 'IDLE';
+        break;
     }
 
     return Container(
