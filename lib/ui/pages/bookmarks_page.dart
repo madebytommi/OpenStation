@@ -100,8 +100,8 @@ class BookmarksPage extends StatelessWidget {
                           mainAxisSpacing: 16,
                         ),
                         itemBuilder: (context, index) {
-                          final station = bookmarks[index];
-                          return StationCard(station: station);
+                          final bookmark = bookmarks[index];
+                          return StationCard(station: bookmark.station);
                         },
                       );
                     },

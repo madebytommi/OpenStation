@@ -1,13 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:open_station/models/bookmark.dart';
 import 'package:open_station/models/station.dart';
 import 'package:open_station/services/bookmark_service.dart';
 
 void main() {
   group('BookmarkService', () {
     late BookmarkService service;
+    late Directory tmpDirectory;
     late File tmpFile;
+
+    final fixedNow = DateTime.utc(2026, 7, 26, 23, 30);
 
     const testStation1 = Station(
       uuid: 'uuid-1',
@@ -23,71 +27,83 @@ void main() {
       resolvedUrl: 'http://url2',
     );
 
-    setUp(() async {
-      // Isolate tests using a temporary file
-      final directory = Directory.systemTemp.createTempSync('openstation_test');
-      tmpFile = File('${directory.path}/bookmarks.json');
+    setUp(() {
+      tmpDirectory = Directory.systemTemp.createTempSync('openstation_test');
+      tmpFile = File('${tmpDirectory.path}/bookmarks.json');
 
       service = BookmarkService();
-      service.customStorageFile = tmpFile;
       service.clearMemory();
+      service.customStorageFile = tmpFile;
+      service.customNow = () => fixedNow;
     });
 
-    tearDown(() async {
-      if (tmpFile.existsSync()) {
-        tmpFile.deleteSync();
+    tearDown(() {
+      service.clearMemory();
+      service.customStorageFile = null;
+      if (tmpDirectory.existsSync()) {
+        tmpDirectory.deleteSync(recursive: true);
       }
     });
 
     test(
-      'starts with empty list and default volume when file is missing',
+      'starts with empty bookmarks and default volume when file is missing',
       () async {
         await service.init();
+
         expect(service.bookmarks, isEmpty);
         expect(service.lastVolume, 1.0);
       },
     );
 
-    test('starts with empty list when file is completely empty', () async {
+    test('starts with empty bookmarks when file is empty', () async {
       tmpFile.writeAsStringSync('');
+
       await service.init();
+
       expect(service.bookmarks, isEmpty);
     });
 
-    test('adds a bookmark and saves to disk atomically', () async {
+    test('adds a dated bookmark and saves the versioned format', () async {
       await service.init();
       await service.addBookmark(testStation1);
 
-      expect(service.bookmarks.length, 1);
+      expect(service.bookmarks, hasLength(1));
+      expect(service.bookmarks.first.station, testStation1);
+      expect(service.bookmarks.first.bookmarkedAt, fixedNow);
       expect(service.isBookmarked(testStation1.uuid), isTrue);
 
-      final contents = tmpFile.readAsStringSync();
-      final decoded = jsonDecode(contents);
-      expect((decoded['bookmarks'] as List).length, 1);
-      expect(decoded['bookmarks'][0]['stationuuid'], 'uuid-1');
+      final decoded = jsonDecode(tmpFile.readAsStringSync());
+      final storedBookmarks = decoded['bookmarks'] as List<dynamic>;
+      final storedBookmark = storedBookmarks.single as Map<String, dynamic>;
+
+      expect(decoded['schemaVersion'], BookmarkService.storageSchemaVersion);
+      expect(storedBookmark['station']['stationuuid'], 'uuid-1');
+      expect(storedBookmark['bookmarkedAt'], fixedNow.toIso8601String());
+      expect(storedBookmark.containsKey('stationuuid'), isFalse);
     });
 
-    test('removes a bookmark and saves to disk', () async {
+    test('removes a bookmark and saves the new format', () async {
       await service.init();
       await service.addBookmark(testStation1);
       await service.addBookmark(testStation2);
 
       await service.removeBookmark('uuid-1');
 
-      expect(service.bookmarks.length, 1);
-      expect(service.bookmarks.first.uuid, 'uuid-2');
+      expect(service.bookmarks, hasLength(1));
+      expect(service.bookmarks.first.station.uuid, 'uuid-2');
 
-      final contents = tmpFile.readAsStringSync();
-      final decoded = jsonDecode(contents);
-      expect((decoded['bookmarks'] as List).length, 1);
-      expect(decoded['bookmarks'][0]['stationuuid'], 'uuid-2');
+      final decoded = jsonDecode(tmpFile.readAsStringSync());
+      final storedBookmarks = decoded['bookmarks'] as List<dynamic>;
+      expect(storedBookmarks, hasLength(1));
+      expect(storedBookmarks.first['station']['stationuuid'], 'uuid-2');
     });
 
-    test('prevents duplicate UUIDs from being added', () async {
+    test('prevents duplicate UUIDs and keeps the original record', () async {
       await service.init();
       await service.addBookmark(testStation1);
+      final original = service.bookmarks.single;
 
-      // Attempt to add duplicate
+      service.customNow = () => fixedNow.add(const Duration(days: 1));
       await service.addBookmark(
         const Station(
           uuid: 'uuid-1',
@@ -97,76 +113,140 @@ void main() {
         ),
       );
 
-      expect(service.bookmarks.length, 1);
-      expect(service.bookmarks.first.name, 'Station 1'); // Keeps original
+      expect(service.bookmarks, hasLength(1));
+      expect(service.bookmarks.single, original);
+      expect(service.bookmarks.single.station.name, 'Station 1');
+      expect(service.bookmarks.single.bookmarkedAt, fixedNow);
     });
 
-    test('handles corrupted or malformed JSON gracefully', () async {
-      // Write garbage to file
+    test(
+      'loads new-format bookmarks with their original dates and order',
+      () async {
+        final firstDate = DateTime.utc(2024, 1, 2, 3, 4, 5);
+        final secondDate = DateTime.utc(2025, 6, 7, 8, 9, 10);
+        final data = {
+          'schemaVersion': BookmarkService.storageSchemaVersion,
+          'volume': 0.5,
+          'bookmarks': [
+            Bookmark(station: testStation1, bookmarkedAt: firstDate).toJson(),
+            Bookmark(station: testStation2, bookmarkedAt: secondDate).toJson(),
+          ],
+        };
+        tmpFile.writeAsStringSync(jsonEncode(data));
+
+        await service.init();
+
+        expect(service.lastVolume, 0.5);
+        expect(service.bookmarks.map((bookmark) => bookmark.station.uuid), [
+          'uuid-1',
+          'uuid-2',
+        ]);
+        expect(service.bookmarks[0].bookmarkedAt, firstDate);
+        expect(service.bookmarks[1].bookmarkedAt, secondDate);
+      },
+    );
+
+    test('migrates station-only bookmarks using the file date', () async {
+      final legacyFileDate = DateTime.utc(2023, 4, 5, 6, 7, 8);
+      final legacyData = {
+        'volume': 0.75,
+        'bookmarks': [testStation1.toJson(), testStation2.toJson()],
+      };
+      tmpFile.writeAsStringSync(jsonEncode(legacyData));
+      tmpFile.setLastModifiedSync(legacyFileDate);
+
+      await service.init();
+
+      expect(service.lastVolume, 0.75);
+      expect(service.bookmarks.map((bookmark) => bookmark.station.uuid), [
+        'uuid-1',
+        'uuid-2',
+      ]);
+      expect(
+        service.bookmarks.every(
+          (bookmark) => bookmark.bookmarkedAt == legacyFileDate,
+        ),
+        isTrue,
+      );
+
+      final migrated = jsonDecode(tmpFile.readAsStringSync());
+      final migratedBookmarks = migrated['bookmarks'] as List<dynamic>;
+      expect(migrated['schemaVersion'], BookmarkService.storageSchemaVersion);
+      expect(migratedBookmarks[0]['station']['stationuuid'], 'uuid-1');
+      expect(
+        migratedBookmarks[0]['bookmarkedAt'],
+        legacyFileDate.toIso8601String(),
+      );
+      expect(migratedBookmarks[0].containsKey('stationuuid'), isFalse);
+    });
+
+    test(
+      'loads mixed records, skips invalid data, and deduplicates by UUID',
+      () async {
+        final newDate = DateTime.utc(2026, 1, 1);
+        final data = {
+          'bookmarks': [
+            Bookmark(station: testStation1, bookmarkedAt: newDate).toJson(),
+            {'station': testStation2.toJson(), 'bookmarkedAt': 'invalid'},
+            testStation2.toJson(),
+            testStation1.toJson(),
+            {'name': 'Missing UUID Station'},
+          ],
+        };
+        tmpFile.writeAsStringSync(jsonEncode(data));
+
+        await service.init();
+
+        expect(service.bookmarks, hasLength(2));
+        expect(service.bookmarks[0].station.uuid, 'uuid-1');
+        expect(service.bookmarks[0].bookmarkedAt, newDate);
+        expect(service.bookmarks[1].station.uuid, 'uuid-2');
+      },
+    );
+
+    test('persists bookmark metadata across a service restart', () async {
+      await service.init();
+      await service.addBookmark(testStation1);
+
+      service.clearMemory();
+      service.customStorageFile = tmpFile;
+      await service.init();
+
+      expect(service.bookmarks, hasLength(1));
+      expect(service.bookmarks.single.station, testStation1);
+      expect(service.bookmarks.single.bookmarkedAt, fixedNow);
+    });
+
+    test('handles corrupted JSON without crashing', () async {
       tmpFile.writeAsStringSync('{ corrupted json...]');
 
       await service.init();
 
-      // Should not throw, should just be empty
       expect(service.bookmarks, isEmpty);
-
-      // Should still be able to save new data
-      await service.addBookmark(testStation1);
-      expect(service.bookmarks.length, 1);
     });
 
-    test('ignores corrupted station entries but loads valid ones', () async {
-      final badData = {
-        'volume': 0.5,
-        'bookmarks': [
-          testStation1.toJson(),
-          {'name': 'Missing UUID Station'}, // Invalid format
-          testStation2.toJson(),
-        ],
-      };
+    test(
+      'saves and clamps volume without altering bookmark metadata',
+      () async {
+        await service.init();
+        await service.addBookmark(testStation1);
 
-      tmpFile.writeAsStringSync(jsonEncode(badData));
+        await service.setVolume(0.8);
+        expect(service.lastVolume, 0.8);
 
-      await service.init();
+        await service.setVolume(1.5);
+        expect(service.lastVolume, 1.0);
 
-      expect(service.lastVolume, 0.5);
-      expect(
-        service.bookmarks.length,
-        2,
-      ); // Station 1 and 2 loaded, bad entry ignored
-      expect(service.bookmarks[0].uuid, 'uuid-1');
-      expect(service.bookmarks[1].uuid, 'uuid-2');
-    });
+        await service.setVolume(-0.5);
+        expect(service.lastVolume, 0.0);
 
-    test('filters out duplicate UUIDs during initial load', () async {
-      final duplicateData = {
-        'volume': 1.0,
-        'bookmarks': [testStation1.toJson(), testStation1.toJson()],
-      };
-
-      tmpFile.writeAsStringSync(jsonEncode(duplicateData));
-
-      await service.init();
-
-      expect(service.bookmarks.length, 1);
-      expect(service.bookmarks.first.uuid, 'uuid-1');
-    });
-
-    test('saves and clamps volume', () async {
-      await service.init();
-
-      await service.setVolume(0.8);
-      expect(service.lastVolume, 0.8);
-
-      await service.setVolume(1.5); // Over bounds
-      expect(service.lastVolume, 1.0);
-
-      await service.setVolume(-0.5); // Under bounds
-      expect(service.lastVolume, 0.0);
-
-      final contents = tmpFile.readAsStringSync();
-      final decoded = jsonDecode(contents);
-      expect(decoded['volume'], 0.0);
-    });
+        final decoded = jsonDecode(tmpFile.readAsStringSync());
+        expect(decoded['volume'], 0.0);
+        expect(
+          decoded['bookmarks'][0]['bookmarkedAt'],
+          fixedNow.toIso8601String(),
+        );
+      },
+    );
   });
 }
