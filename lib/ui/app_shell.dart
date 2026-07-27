@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:open_station/ui/pages/about_page.dart';
 import 'package:open_station/ui/pages/bookmarks_page.dart';
 import 'package:open_station/ui/pages/discover_page.dart';
 import 'package:open_station/ui/widgets/player_bar.dart';
@@ -31,8 +32,12 @@ class _AppShellState extends State<AppShell> {
                 ),
                 Expanded(
                   child: IndexedStack(
-                    index: _activeTab == NavigationTab.discover ? 0 : 1,
-                    children: const [DiscoverPage(), BookmarksPage()],
+                    index: _activeTab.index,
+                    children: const [
+                      DiscoverPage(),
+                      BookmarksPage(),
+                      AboutPage(),
+                    ],
                   ),
                 ),
               ],
