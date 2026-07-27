@@ -92,12 +92,13 @@ class BookmarkService extends ChangeNotifier {
             }
           }
 
-          if (bookmark != null &&
+          final loadedBookmark = bookmark;
+          if (loadedBookmark != null &&
               !_bookmarks.any(
                 (existing) =>
-                    existing.station.uuid == bookmark!.station.uuid,
+                    existing.station.uuid == loadedBookmark.station.uuid,
               )) {
-            _bookmarks.add(bookmark);
+            _bookmarks.add(loadedBookmark);
           }
         }
       }
