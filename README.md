@@ -6,9 +6,9 @@ Open Station provides a clean way to discover public internet radio, listen, sav
 
 ## Release status
 
-The source is currently aligned to **v0.1.0+1**. A packaged v0.1.0 release should be published only after the final Windows manual-validation checklist is complete.
+The source is currently aligned to **v0.1.0+1**. A packaged v0.1.0 release is available.
 
-When a packaged release is available:
+To run the release:
 
 1. Open the repository's **Releases** page.
 2. Download `OpenStation-v0.1.0-Windows.zip`.
@@ -83,5 +83,3 @@ flutter test test/bookmark_model_test.dart `
 ```
 
 `test/live_dns_test.dart` performs a real network lookup and is intentionally excluded from the deterministic release gate.
-
-Before publishing v0.1.0, also complete the manual Windows checks documented in `RELEASE_READINESS.md`.
