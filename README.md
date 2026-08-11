@@ -1,14 +1,14 @@
 # Open Station
 
-**A minimal, local-first, privacy-focused Windows desktop internet radio player.**
+**A minimal, local-first, privacy-focused desktop internet radio player for Windows and macOS.**
 
 Open Station provides a clean way to discover public internet radio, listen, save favorite stations, and return to them later. It requires no account and includes no app-specific advertising, cloud synchronization, or app-specific analytics. Individual radio stations may include their own broadcast advertising.
 
 ## Release status
 
-The source is currently aligned to **v0.1.0+1**. A packaged v0.1.0 release is available.
+The source is currently aligned to **v0.1.0+1**. Packaged v0.1.0 releases are available for Windows and macOS.
 
-To run the release:
+To run the Windows release:
 
 1. Open the repository's **Releases** page.
 2. Download `OpenStation-v0.1.0-Windows.zip`.
@@ -16,6 +16,16 @@ To run the release:
 4. Launch `open_station.exe` from the extracted folder.
 
 Do not move only the executable; the adjacent runtime files are required.
+
+To run the macOS release:
+
+1. Open the repository's **Releases** page.
+2. Download `OpenStation-v0.1.0-macOS.zip`.
+3. Extract the archive.
+4. Drag `Open Station.app` to your Applications folder or launch it directly.
+
+> [!WARNING]
+> **macOS Gatekeeper:** The current macOS release is ad-hoc signed and not notarized by Apple. When you launch it for the first time, macOS Gatekeeper will block it with an "unidentified developer" warning. To open it, you must right-click (or Control-click) the application icon and select **Open**, then confirm.
 
 ## Key features
 
@@ -39,26 +49,35 @@ Do not move only the executable; the adjacent runtime files are required.
 
 ## Tech stack
 
-- **Framework:** Flutter Desktop, targeting Windows
+- **Framework:** Flutter Desktop, targeting Windows and macOS
 - **Language:** Dart
 - **Directory:** Radio Browser
-- **Audio engine:** `media_kit` with the bundled Windows audio libraries
+- **Audio engine:** `media_kit` with the bundled audio libraries
 - **State management:** `provider` and `ChangeNotifier`
 - **Persistence:** Atomic local JSON storage using `dart:io` and `path_provider`
 
 ## Building from source
 
-You need the Flutter SDK configured for Windows desktop development and Visual Studio with the **Desktop development with C++** workload.
+You need the Flutter SDK configured for Windows or macOS desktop development.
 
+For Windows development:
 ```powershell
 flutter pub get
 flutter run -d windows
 ```
 
+For macOS development:
+```bash
+flutter pub get
+flutter run -d macos
+```
+
 Build a release candidate with:
 
-```powershell
+```bash
 flutter build windows
+# or
+flutter build macos
 ```
 
 The Windows output is produced under:

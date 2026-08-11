@@ -17,8 +17,7 @@ class RadioBrowserException implements Exception {
 
 /// Service handling DNS discovery, query execution, and failover for Radio Browser API.
 class RadioBrowserService {
-  static const String userAgent =
-      'OpenStation/0.1.0 (Windows Desktop Radio App)';
+  static const String userAgent = 'OpenStation/0.1.0 (Desktop Radio App)';
   static const Duration defaultTimeout = Duration(seconds: 5);
 
   final http.Client _client;

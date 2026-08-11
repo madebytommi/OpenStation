@@ -28,7 +28,7 @@ class AboutPage extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               const Text(
-                'A local-first Windows internet radio app built around a simple Discover, Play, Bookmark, and Play Again loop.',
+                'A local-first desktop internet radio app built around a simple Discover, Play, Bookmark, and Play Again loop.',
                 style: TextStyle(
                   color: AppColors.secondaryText,
                   fontSize: 13,

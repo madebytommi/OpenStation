@@ -1,5 +1,5 @@
 name: open_station
-description: "A local-first Windows desktop internet radio player."
+description: "A local-first desktop internet radio player."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -35,7 +35,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^1.6.0
   media_kit: ^1.2.6
-  media_kit_libs_windows_audio: ^1.0.9
+  media_kit_libs_audio: ^1.0.7
   path_provider: ^2.1.6
   provider: ^6.1.5+1
   path: ^1.9.1
