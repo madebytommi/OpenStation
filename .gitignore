@@ -50,6 +50,11 @@ app.*.map.json
 /EDGE_CASES.md
 /MVP.md
 /PROJECT_RULES.md
+
+# Packaged release artifacts
+OpenStation-v*-Windows.zip
+OpenStation-v*-macOS.zip
+OpenStation-v*-*.zip
 /RELEASE_READINESS.md
 /TECHNICAL_SPIKES.md
 /VISION.md
